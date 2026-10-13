@@ -11,6 +11,8 @@ import kotlinx.coroutines.test.runTest
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedFetcher
+import to.sava.legirss.html.HtmlBlock
+import to.sava.legirss.html.InlineText
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NewArticle
@@ -25,11 +27,13 @@ class MainViewModelTest {
     private val store = LegirssStore(DatabaseFactory.openInMemory(), Dispatchers.Unconfined)
     private var feedBody = "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>"
 
+    private val openedUrls = mutableListOf<String>()
+
     private fun article(title: String, state: ArticleState, sortAt: Long) = NewArticle(
         identity = title,
         title = title,
-        link = null,
-        summary = null,
+        link = "https://example.com/$title",
+        summary = "<p>summary of $title</p>",
         content = null,
         author = null,
         category = null,
@@ -59,7 +63,42 @@ class MainViewModelTest {
         )
         val fetcher = FeedFetcher(FeedFetcher.createClient(MockEngine { respond(feedBody) }, timeoutMillis = 1_000))
         val updater = FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { 1_000L })
-        return MainViewModel(store, updater, backgroundScope, now = { 1_000L }).also(MainViewModel::load)
+        return MainViewModel(
+            store = store,
+            updater = updater,
+            scope = backgroundScope,
+            parseDispatcher = Dispatchers.Unconfined,
+            now = { 1_000L },
+            openUrl = openedUrls::add,
+        ).also(MainViewModel::load)
+    }
+
+    /** 記事を選ぶと本文を読み出して表示用のブロックにする。一覧を並べ直すと表示は消える。 */
+    @Test
+    fun showsContentOfSelectedArticle() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.selectArticle(1)
+        val shown = viewModel.state.value.articleContent
+        viewModel.cycleFilter()
+
+        assertEquals(listOf(HtmlBlock.Paragraph(InlineText("summary of older"))), shown?.blocks)
+        assertEquals(viewModel.state.value.articles.size, 1)
+        assertNull(viewModel.state.value.articleContent)
+    }
+
+    /** 選んでいる記事のリンクを外部のブラウザへ渡す。記事を選んでいなければ何もしない。 */
+    @Test
+    fun opensLinkOfSelectedArticle() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.openSelectedArticle()
+        val openedWithoutSelection = openedUrls.toList()
+        viewModel.selectArticle(0)
+        viewModel.openSelectedArticle()
+
+        assertEquals(emptyList(), openedWithoutSelection)
+        assertEquals(listOf("https://example.com/newer"), openedUrls)
     }
 
     private val MainViewModel.titles get() = state.value.articles.map { it.title }

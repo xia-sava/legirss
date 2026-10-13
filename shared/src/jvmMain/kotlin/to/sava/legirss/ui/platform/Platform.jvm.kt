@@ -1,5 +1,6 @@
 package to.sava.legirss.ui.platform
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -17,6 +18,11 @@ actual val VerticalResizePointerIcon: PointerIcon = PointerIcon(Cursor(Cursor.N_
 
 @Composable
 actual fun ListScrollbar(state: LazyListState, modifier: Modifier) {
+    VerticalScrollbar(rememberScrollbarAdapter(state), modifier)
+}
+
+@Composable
+actual fun ContentScrollbar(state: ScrollState, modifier: Modifier) {
     VerticalScrollbar(rememberScrollbarAdapter(state), modifier)
 }
 

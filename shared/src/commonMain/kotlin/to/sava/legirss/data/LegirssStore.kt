@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import to.sava.legirss.data.db.LegirssDatabase
 import to.sava.legirss.feed.ParsedFeed
+import to.sava.legirss.model.ArticleBody
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -73,6 +74,12 @@ class LegirssStore(
             null -> queries.selectArticleRows(::toArticleRow)
             else -> queries.selectArticleRowsByChannels(channelIds, ::toArticleRow)
         }.executeAsList()
+    }
+
+    /** 記事の要約と本文を読み出す。記事が無ければ null。 */
+    suspend fun loadArticleBody(articleId: Long): ArticleBody? = access {
+        queries.selectArticleBody(articleId) { summary, content, link -> ArticleBody(summary, content, link) }
+            .executeAsOneOrNull()
     }
 
     /** 購読中のチャンネルを更新の対象として返す。[channelIds] が null でなければ、その中のものに限る。 */

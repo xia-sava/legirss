@@ -1,5 +1,6 @@
 package to.sava.legirss.ui
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -8,6 +9,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /** メイン画面から呼ぶ操作。 */
 interface MainActions {
@@ -29,35 +32,59 @@ interface MainActions {
 
     fun deleteSelectedArticle()
 
+    fun openSelectedArticle()
+
+    fun openLink(url: String)
+
     fun updateAll()
 
     fun updateSelected()
 }
 
-/** 記事の一覧にフォーカスがあるときのキー操作。処理したら true を返す。 */
-fun MainActions.handleArticleListKey(event: KeyEvent): Boolean {
-    if (event.type != KeyEventType.KeyDown || event.hasModifier()) return false
-    when (event.key) {
-        Key.Spacebar -> readOn()
-        Key.DirectionRight -> cycleSelectedState(forward = true)
-        Key.DirectionLeft -> cycleSelectedState(forward = false)
-        Key.Delete -> deleteSelectedArticle()
-        else -> return false
-    }
-    return true
-}
-
-/** どこにフォーカスがあっても効くキー操作。処理したら true を返す。 */
-fun MainActions.handleWindowKey(event: KeyEvent): Boolean {
+/**
+ * メイン画面のキー操作。一覧の中の移動（↑↓ など）は一覧が自分で処理するので、ここには来ない。
+ *
+ * @param hasSelectedArticle 記事を選んでいるか。
+ * @param articleScroll 記事の表示領域のスクロール位置。
+ * @return 処理したら true。
+ */
+fun MainActions.handleKey(
+    event: KeyEvent,
+    hasSelectedArticle: Boolean,
+    articleScroll: ScrollState,
+    scope: CoroutineScope,
+): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
+    val plain = !event.isCtrlPressed && !event.isAltPressed && !event.isShiftPressed
     when {
         event.key == Key.F2 && event.isAltPressed -> updateSelected()
         event.key == Key.F2 -> updateAll()
         event.key == Key.K && event.isCtrlPressed -> cycleFilter()
-        event.key == Key.Spacebar && !event.hasModifier() -> readOn()
+        // 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の記事へ進む。
+        event.key == Key.Spacebar && plain -> when {
+            hasSelectedArticle -> scope.launch { if (!articleScroll.pageDown()) readOn() }
+            else -> readOn()
+        }
+        event.key == Key.Spacebar && event.isShiftPressed -> scope.launch { articleScroll.pageUp() }
+        event.key == Key.Enter && plain -> openSelectedArticle()
+        event.key == Key.DirectionRight && plain -> cycleSelectedState(forward = true)
+        event.key == Key.DirectionLeft && plain -> cycleSelectedState(forward = false)
+        event.key == Key.Delete && plain -> deleteSelectedArticle()
         else -> return false
     }
     return true
 }
 
-private fun KeyEvent.hasModifier(): Boolean = isCtrlPressed || isAltPressed || isShiftPressed
+// 1 回で送る量。読んでいた位置を見失わないよう、表示範囲より少し短くする。
+private const val PAGE_FRACTION = 0.85f
+
+/** 1 画面ぶん先へ送る。すでに末尾なら何もせず false を返す。 */
+private suspend fun ScrollState.pageDown(): Boolean {
+    if (value >= maxValue) return false
+    scrollTo((value + viewportSize * PAGE_FRACTION).toInt().coerceAtMost(maxValue))
+    return true
+}
+
+private suspend fun ScrollState.pageUp() {
+    scrollTo((value - viewportSize * PAGE_FRACTION).toInt().coerceAtLeast(0))
+}

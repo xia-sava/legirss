@@ -1,5 +1,6 @@
 package to.sava.legirss
 
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -18,10 +19,14 @@ import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedHttp
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainViewModel
-import to.sava.legirss.ui.handleWindowKey
-import to.sava.legirss.update.FeedUpdater
+import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
+import to.sava.legirss.update.FeedUpdater
+import java.awt.Desktop
+import java.io.IOException
+import java.net.URI
+import java.net.URISyntaxException
 import java.nio.file.Path
 
 private const val APP_NAME = "legirss"
@@ -40,17 +45,27 @@ fun main() {
     val style = LegirssStyle(fontFamily = uiFontFamily())
     application {
         val scope = rememberCoroutineScope()
+        val articleScroll = rememberScrollState()
         val viewModel = remember {
-            MainViewModel(store, updater, scope, now = System::currentTimeMillis).also(MainViewModel::load)
+            MainViewModel(
+                store = store,
+                updater = updater,
+                scope = scope,
+                parseDispatcher = Dispatchers.Default,
+                now = System::currentTimeMillis,
+                openUrl = ::openInBrowser,
+            ).also(MainViewModel::load)
         }
         Window(
             onCloseRequest = ::exitApplication,
             title = APP_NAME,
             state = rememberWindowState(size = DEFAULT_WINDOW_SIZE),
-            onKeyEvent = viewModel::handleWindowKey,
+            onKeyEvent = { event ->
+                viewModel.handleKey(event, viewModel.state.value.selectedArticle != null, articleScroll, scope)
+            },
         ) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(viewModel)
+                MainScreen(viewModel, articleScroll)
             }
         }
     }
@@ -66,3 +81,14 @@ private fun dataDir(): Path =
     System.getProperty(DATA_DIR_PROPERTY)?.let(Path::of)
         ?: System.getenv("APPDATA")?.let { Path.of(it, APP_NAME) }
         ?: Path.of(System.getProperty("user.home"), ".$APP_NAME")
+
+/** URL を既定のブラウザで開く。開けなかった場合は理由を標準エラーに出す。 */
+private fun openInBrowser(url: String) {
+    try {
+        Desktop.getDesktop().browse(URI(url))
+    } catch (exception: URISyntaxException) {
+        System.err.println("URL として扱えません: $url (${exception.message})")
+    } catch (exception: IOException) {
+        System.err.println("ブラウザで開けません: $url (${exception.message})")
+    }
+}

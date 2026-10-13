@@ -1,7 +1,11 @@
 package to.sava.legirss.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,12 +41,14 @@ import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.DataTable
 import to.sava.legirss.ui.component.HorizontalSplit
+import to.sava.legirss.ui.component.HtmlContent
 import to.sava.legirss.ui.component.SegmentedButtons
 import to.sava.legirss.ui.component.TableColumn
 import to.sava.legirss.ui.component.TableText
 import to.sava.legirss.ui.component.ToolbarButton
 import to.sava.legirss.ui.component.TreeView
 import to.sava.legirss.ui.component.VerticalSplit
+import to.sava.legirss.ui.platform.ContentScrollbar
 import to.sava.legirss.ui.platform.formatListDateTime
 import to.sava.legirss.ui.theme.LegirssColors
 import to.sava.legirss.ui.theme.LocalLegirssStyle
@@ -62,20 +68,24 @@ private val BAR_PADDING = 4.dp
 private val TOOLBAR_GROUP_GAP = 8.dp
 private val STATE_ICON_SIZE = 9.dp
 private val ARTICLE_PANE_PADDING = 8.dp
+private val SCROLLBAR_WIDTH = 10.dp
 private val ARTICLE_TITLE_EXTRA_SIZE = 3.sp
 
 private const val UPDATE_ALL_LABEL = "更新"
 private const val UPDATE_SELECTED_LABEL = "選択更新"
 private const val CANCEL_UPDATE_LABEL = "中止"
 
+/**
+ * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
+ */
 @Composable
-fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+fun MainScreen(viewModel: MainViewModel, articleScroll: ScrollState, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
-    MainScreen(state, viewModel, modifier)
+    MainScreen(state, viewModel, articleScroll, modifier)
 }
 
 @Composable
-fun MainScreen(state: MainUiState, actions: MainActions, modifier: Modifier = Modifier) {
+fun MainScreen(state: MainUiState, actions: MainActions, articleScroll: ScrollState, modifier: Modifier = Modifier) {
     val style = LocalLegirssStyle.current
     var treeWidth by remember { mutableStateOf(DEFAULT_TREE_WIDTH) }
     var listHeight by remember { mutableStateOf(DEFAULT_LIST_HEIGHT) }
@@ -108,7 +118,7 @@ fun MainScreen(state: MainUiState, actions: MainActions, modifier: Modifier = Mo
                             onColumnResize = { column, width -> columnWidths[column] = width },
                         )
                     },
-                    second = { ArticlePane(state.selectedArticle, state.channelNames) },
+                    second = { ArticlePane(state, actions, articleScroll) },
                 )
             },
         )
@@ -171,7 +181,6 @@ private fun ArticleTable(
         centerSelection = true,
         modifier = Modifier.fillMaxSize(),
         focusRequester = focusRequester,
-        onKeyEvent = actions::handleArticleListKey,
     ) { article, column ->
         val unread = article.state == ArticleState.UNREAD
         when (column) {
@@ -194,22 +203,45 @@ private fun DrawScope.drawStateIcon(state: ArticleState, colors: LegirssColors) 
     }
 }
 
+/** 選んでいる記事の、タイトル・日付とチャンネル名・本文を上から順に出す。 */
 @Composable
-private fun ArticlePane(article: ArticleRow?, channelNames: Map<Long, String>) {
+private fun ArticlePane(state: MainUiState, actions: MainActions, scroll: ScrollState) {
     val style = LocalLegirssStyle.current
-    Column(Modifier.fillMaxSize().background(style.colors.background).padding(ARTICLE_PANE_PADDING)) {
-        if (article == null) return@Column
-        BasicText(
-            text = article.title,
-            style = style.textStyle((style.listFontSize.value + ARTICLE_TITLE_EXTRA_SIZE.value).sp, bold = true),
-        )
-        Spacer(Modifier.height(BAR_PADDING))
-        BasicText(
-            text = listOf(formatListDateTime(article.sortAt), channelNames[article.channelId].orEmpty())
-                .filter(String::isNotEmpty)
-                .joinToString("  "),
-            style = style.textStyle(color = style.colors.textDim),
-        )
+    val article = state.selectedArticle
+
+    // 別の記事を選んだら、先頭から読めるようにスクロール位置を戻す。
+    LaunchedEffect(article?.id) { scroll.scrollTo(0) }
+
+    Row(Modifier.fillMaxSize().background(style.colors.background)) {
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(ARTICLE_PANE_PADDING)) {
+            if (article == null) return@Column
+            BasicText(
+                text = article.title,
+                style = style.textStyle(
+                    fontSize = (style.articleFontSize.value + ARTICLE_TITLE_EXTRA_SIZE.value).sp,
+                    bold = true,
+                    color = if (article.link != null) style.colors.link else style.colors.text,
+                ),
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = article.link != null,
+                    onClick = actions::openSelectedArticle,
+                ),
+            )
+            Spacer(Modifier.height(BAR_PADDING))
+            BasicText(
+                text = listOf(formatListDateTime(article.sortAt), state.channelNames[article.channelId].orEmpty())
+                    .filter(String::isNotEmpty)
+                    .joinToString("  "),
+                style = style.textStyle(color = style.colors.textDim),
+            )
+            Spacer(Modifier.height(ARTICLE_PANE_PADDING))
+            state.articleContent?.takeIf { it.articleId == article.id }?.let { content ->
+                HtmlContent(content.blocks, actions::openLink, Modifier.fillMaxWidth())
+            }
+        }
+        ContentScrollbar(scroll, Modifier.width(SCROLLBAR_WIDTH).fillMaxHeight())
     }
 }
 

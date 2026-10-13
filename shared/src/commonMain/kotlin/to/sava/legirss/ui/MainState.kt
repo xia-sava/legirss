@@ -1,5 +1,6 @@
 package to.sava.legirss.ui
 
+import to.sava.legirss.html.HtmlBlock
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -51,6 +52,12 @@ data class ArticleSort(
         if (clicked == column) copy(descending = !descending) else copy(column = clicked)
 }
 
+/** 表示用に解釈した記事の本文。 */
+data class ArticleContent(
+    val articleId: Long,
+    val blocks: List<HtmlBlock>,
+)
+
 data class MainUiState(
     val treeRows: List<TreeRow<NodeSelection>> = emptyList(),
     val selectedNode: NodeSelection = NodeSelection.All,
@@ -61,6 +68,8 @@ data class MainUiState(
     val channelNames: Map<Long, String> = emptyMap(),
     val filter: StateFilter = StateFilter.ALL,
     val sort: ArticleSort = ArticleSort(),
+    /** 選んでいる記事の本文。読み出しが済むまでと、記事を選んでいない間は null。 */
+    val articleContent: ArticleContent? = null,
     /** 実行中の更新の進み具合。実行していなければ null。 */
     val updateProgress: UpdateProgress? = null,
     /** 直近の更新の結果など、ステータスバーに出す知らせ。 */

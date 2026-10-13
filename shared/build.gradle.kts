@@ -12,6 +12,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            implementation(libs.coil.compose)
+            implementation(libs.coil.networkKtor)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)

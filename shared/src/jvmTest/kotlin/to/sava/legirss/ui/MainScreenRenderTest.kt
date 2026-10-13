@@ -1,5 +1,6 @@
 package to.sava.legirss.ui
 
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -10,6 +11,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -44,6 +46,10 @@ private object NoActions : MainActions {
 
     override fun deleteSelectedArticle() = Unit
 
+    override fun openSelectedArticle() = Unit
+
+    override fun openLink(url: String) = Unit
+
     override fun updateAll() = Unit
 
     override fun updateSelected() = Unit
@@ -63,7 +69,7 @@ internal object MainScreenRenderer {
     fun render(state: MainUiState): Image =
         ImageComposeScene(WIDTH, HEIGHT, Density(1f)) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(state, NoActions)
+                MainScreen(state, NoActions, rememberScrollState())
             }
         }.use { scene ->
             // 遅延リストの中身は 2 回目の描画で確定する。
@@ -113,6 +119,15 @@ class MainScreenRenderTest {
             articles = arrangeArticles(articles, StateFilter.ALL, ArticleSort(), tree.channelNames),
             selectedArticleIndex = 0,
             channelNames = tree.channelNames,
+            articleContent = ArticleContent(
+                articleId = 40,
+                blocks = HtmlBlocks.parse(
+                    "<p>本文の段落。<b>太字</b>と<a href=\"https://example.com/\">リンク</a>を含む。</p>" +
+                        "<h2>見出し</h2><ul><li>項目 1</li><li>項目 2</li></ul>" +
+                        "<blockquote><p>引用した文。</p></blockquote><pre>val x = 1\nval y = 2</pre><hr><p>末尾。</p>",
+                    baseUrl = null,
+                ),
+            ),
         )
 
         val image = MainScreenRenderer.render(state)

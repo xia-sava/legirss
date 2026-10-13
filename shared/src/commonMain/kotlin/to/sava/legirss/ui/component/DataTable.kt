@@ -40,7 +40,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -76,7 +75,6 @@ private const val SORT_MARK_DESCENDING = "▼"
  * @param sortedColumn 並べ替えの印を出す列。
  * @param centerSelection キー操作で選択を動かしたとき、選択行を表示範囲の中央付近へ寄せる。
  * @param focusRequester この一覧にフォーカスを移すためのもの。
- * @param onKeyEvent 選択の移動に使わないキーが押されたときに呼ぶ。処理したら true を返す。
  */
 @Composable
 fun <C, R> DataTable(
@@ -92,7 +90,6 @@ fun <C, R> DataTable(
     centerSelection: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
-    onKeyEvent: (KeyEvent) -> Boolean = { false },
     cell: @Composable (row: R, column: C) -> Unit,
 ) {
     val style = LocalLegirssStyle.current
@@ -134,7 +131,7 @@ fun <C, R> DataTable(
                     Key.PageDown -> moveSelection(current + page)
                     Key.MoveHome -> moveSelection(0)
                     Key.MoveEnd -> moveSelection(rows.lastIndex)
-                    else -> return@onKeyEvent onKeyEvent(event)
+                    else -> return@onKeyEvent false
                 }
                 true
             },

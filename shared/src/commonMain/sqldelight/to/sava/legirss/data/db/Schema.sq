@@ -94,6 +94,9 @@ SELECT id, channel_id, title, link, author, category, published_at, sort_at, sta
 FROM article
 WHERE channel_id IN ?;
 
+selectArticleBody:
+SELECT summary, content, link FROM article WHERE id = ?;
+
 selectArticleCounts:
 SELECT channel_id, COUNT(*) AS total, SUM(state = 0) AS unread
 FROM article

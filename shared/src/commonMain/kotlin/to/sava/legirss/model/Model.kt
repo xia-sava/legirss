@@ -52,6 +52,16 @@ data class ArticleRow(
     val state: ArticleState,
 )
 
+/** 記事の中身。一覧には載せず、記事を表示するときに読み出す。 */
+data class ArticleBody(
+    val summary: String?,
+    val content: String?,
+    val link: String?,
+) {
+    /** 表示に使う本文。本文があればそれを、無ければ要約を使う。 */
+    val text: String? get() = content ?: summary
+}
+
 data class ArticleCount(
     val total: Int,
     val unread: Int,

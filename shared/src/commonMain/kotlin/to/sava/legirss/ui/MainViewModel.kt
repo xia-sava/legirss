@@ -1,6 +1,7 @@
 package to.sava.legirss.ui
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import to.sava.legirss.data.LegirssStore
+import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -23,7 +25,11 @@ class MainViewModel(
     private val store: LegirssStore,
     private val updater: FeedUpdater,
     private val scope: CoroutineScope,
+    /** 記事の本文の解釈に使う。 */
+    private val parseDispatcher: CoroutineDispatcher,
     private val now: () -> Long,
+    /** URL を外部のブラウザで開く。 */
+    private val openUrl: (String) -> Unit,
 ) : MainActions {
     private val mutableState = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = mutableState.asStateFlow()
@@ -37,6 +43,7 @@ class MainViewModel(
     private var loadedArticles: List<ArticleRow> = emptyList()
 
     private var updateJob: Job? = null
+    private var contentJob: Job? = null
 
     init {
         scope.launch {
@@ -74,6 +81,34 @@ class MainViewModel(
         val article = mutableState.value.articles.getOrNull(index) ?: return
         mutableState.update { it.copy(selectedArticleIndex = index) }
         if (article.state == ArticleState.UNREAD) changeState(index, ArticleState.READ)
+        showSelectedContent()
+    }
+
+    /** 選んでいる記事のリンクを外部のブラウザで開く。 */
+    override fun openSelectedArticle() {
+        mutableState.value.selectedArticle?.link?.let(openUrl)
+    }
+
+    override fun openLink(url: String) {
+        openUrl(url)
+    }
+
+    /** 選んでいる記事の本文を読み出して表示する。選んでいなければ表示を消す。 */
+    private fun showSelectedContent() {
+        contentJob?.cancel()
+        val article = mutableState.value.selectedArticle
+        if (article == null) {
+            mutableState.update { it.copy(articleContent = null) }
+            return
+        }
+        contentJob = scope.launch {
+            val body = store.loadArticleBody(article.id)
+            val blocks = withContext(parseDispatcher) { body?.text?.let { HtmlBlocks.parse(it, body.link) }.orEmpty() }
+            // 読み出している間に選択が変わっていたら、古い結果は捨てる。
+            mutableState.update { state ->
+                if (state.selectedArticle?.id == article.id) state.copy(articleContent = ArticleContent(article.id, blocks)) else state
+            }
+        }
     }
 
     /** 一番古い未読の記事を選ぶ。未読が無ければ何もしない。 */
@@ -111,6 +146,7 @@ class MainViewModel(
             state.copy(articles = remaining, selectedArticleIndex = index.coerceAtMost(remaining.lastIndex).takeIf { it >= 0 })
                 .withTree()
         }
+        showSelectedContent()
         scope.launch { store.deleteArticle(article.id, now()) }
     }
 
@@ -193,10 +229,14 @@ class MainViewModel(
     )
 
     /** 一覧を作り直す。行の並びが変わるので選択は外す。 */
-    private fun MainUiState.withArrangedArticles(): MainUiState = copy(
-        articles = arrangeArticles(loadedArticles, filter, sort, channelNames),
-        selectedArticleIndex = null,
-    )
+    private fun MainUiState.withArrangedArticles(): MainUiState {
+        contentJob?.cancel()
+        return copy(
+            articles = arrangeArticles(loadedArticles, filter, sort, channelNames),
+            selectedArticleIndex = null,
+            articleContent = null,
+        )
+    }
 
     private companion object {
         const val UPDATE_CANCELLED_MESSAGE = "更新を中止しました"
