@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -112,7 +113,15 @@ private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
 private const val DELETE_ARTICLE_LABEL = "削除"
 
+/** ツールバーの右端に出す知らせ。[onClick] があれば、押せるボタンとして出す。 */
+@Immutable
+data class ToolbarNotice(
+    val label: String,
+    val onClick: (() -> Unit)?,
+)
+
 /**
+ * @param toolbarNotice ツールバーの右端に出す知らせ。出さなければ null。
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
  * @param layout 境目の位置と列の幅。
  * @param onLayoutChange 利用者が境目や列の幅を動かしたときに、動かした後の値を伝える。
@@ -125,10 +134,11 @@ fun MainScreen(
     layout: ScreenLayout,
     onLayoutChange: (ScreenLayout) -> Unit,
     modifier: Modifier = Modifier,
+    toolbarNotice: ToolbarNotice? = null,
 ) {
     val style = LocalLegirssStyle.current
     Box(modifier.fillMaxSize()) {
-        MainContent(state, actions, articleScroll, layout, onLayoutChange)
+        MainContent(state, actions, articleScroll, layout, onLayoutChange, toolbarNotice)
         state.dialog?.let { DialogHost(it, state.settings, actions) }
     }
 }
@@ -140,6 +150,7 @@ private fun MainContent(
     articleScroll: ScrollState,
     layout: ScreenLayout,
     onLayoutChange: (ScreenLayout) -> Unit,
+    toolbarNotice: ToolbarNotice?,
 ) {
     val style = LocalLegirssStyle.current
     val panes = remember { PaneFocus() }
@@ -151,7 +162,7 @@ private fun MainContent(
                 (event.type == KeyEventType.KeyDown && event.key == Key.F6).also { if (it) panes.moveOn(forward = !event.isShiftPressed) }
             },
     ) {
-        Toolbar(state, actions)
+        Toolbar(state, actions, toolbarNotice)
         HorizontalSplit(
             firstWidth = layout.treeWidth,
             onFirstWidthChange = { onLayoutChange(layout.copy(treeWidth = it)) },
@@ -271,7 +282,7 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
 }
 
 @Composable
-private fun Toolbar(state: MainUiState, actions: MainActions) {
+private fun Toolbar(state: MainUiState, actions: MainActions, notice: ToolbarNotice?) {
     val style = LocalLegirssStyle.current
     val updating = state.updateProgress != null
     Row(
@@ -291,6 +302,13 @@ private fun Toolbar(state: MainUiState, actions: MainActions) {
         )
         Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
         ToolbarButton(SETTINGS_LABEL, onClick = actions::openSettings)
+        Box(Modifier.weight(1f))
+        notice?.let {
+            when (val onClick = it.onClick) {
+                null -> BasicText(it.label, style = style.textStyle(color = style.colors.textDim))
+                else -> ToolbarButton(it.label, onClick = onClick)
+            }
+        }
     }
 }
 

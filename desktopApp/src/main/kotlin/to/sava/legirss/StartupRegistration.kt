@@ -38,7 +38,10 @@ class StartupRegistration(
         // jpackage で作った起動用の実行ファイルが設定するシステムプロパティ。
         private const val LAUNCHER_PATH_PROPERTY = "jpackage.app-path"
 
-        fun forCurrentProcess(): StartupRegistration = StartupRegistration(System.getProperty(LAUNCHER_PATH_PROPERTY))
+        /** インストールしたアプリの起動用の実行ファイルの場所。そこから起動されていなければ null。 */
+        fun launcherPath(): String? = System.getProperty(LAUNCHER_PATH_PROPERTY)
+
+        fun forCurrentProcess(): StartupRegistration = StartupRegistration(launcherPath())
 
         private fun runQuietly(command: List<String>): Int =
             try {

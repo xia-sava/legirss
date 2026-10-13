@@ -46,10 +46,18 @@ import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
 import to.sava.legirss.ui.ScreenLayout
+import to.sava.legirss.ui.ToolbarNotice
 import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
+import to.sava.legirss.update.AppUpdater
+import to.sava.legirss.update.AppVersion
 import to.sava.legirss.update.FeedUpdater
+import to.sava.legirss.update.UpdateChecker
+import to.sava.legirss.update.UpdateHttp
+import to.sava.legirss.update.UpdateInstaller
+import to.sava.legirss.update.UpdateManifest
+import to.sava.legirss.update.UpdateState
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Toolkit
@@ -69,6 +77,10 @@ private const val DATA_DIR_PROPERTY = "legirss.dataDir"
 private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val LAYOUT_SAVE_DELAY_MILLIS = 500L
 private const val WINDOW_ICON_SIZE = 64
+private const val UPDATE_CHECK_INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
+
+// 自分の版を読めなかったときに使う版。どの配布中の版よりも古いものとして扱う。
+private val UNKNOWN_VERSION = requireNotNull(AppVersion.parse("0"))
 private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main(args: Array<String>) {
@@ -166,6 +178,22 @@ fun main(args: Array<String>) {
         LaunchedEffect(Unit) { viewModel.runAutomaticUpdates() }
         LaunchedEffect(Unit) { runDailyBackups(backup) }
 
+        val appUpdater = remember {
+            val http = UpdateHttp(Dispatchers.IO)
+            val installer = UpdateInstaller(StartupRegistration.launcherPath(), dataDir, http::download)
+            AppUpdater(
+                checker = UpdateChecker(AppVersion.current() ?: UNKNOWN_VERSION, UpdateManifest.PUBLIC_KEY, http::fetch),
+                canInstall = installer.isSupported,
+                download = installer::downloadVerified,
+                launch = installer::launch,
+                scope = scope,
+                reportError = AppLog::error,
+                onReadyToExit = ::exitApplication,
+            )
+        }
+        val updateState by appUpdater.state.collectAsState()
+        LaunchedEffect(Unit) { appUpdater.runPeriodicChecks(UPDATE_CHECK_INTERVAL_MILLIS) }
+
         // 最小化はタスクトレイへしまう操作として扱う。
         LaunchedEffect(windowState.isMinimized) {
             if (windowState.isMinimized) {
@@ -204,10 +232,25 @@ fun main(args: Array<String>) {
                 }
             }
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(state, viewModel, articleScroll, layout, onLayoutChange = { layout = it })
+                MainScreen(
+                    state = state,
+                    actions = viewModel,
+                    articleScroll = articleScroll,
+                    layout = layout,
+                    onLayoutChange = { layout = it },
+                    toolbarNotice = updateNoticeOf(updateState, onInstall = appUpdater::install),
+                )
             }
         }
     }
+}
+
+/** アプリの更新の状況を、ツールバーに出す知らせにする。新しい版が無ければ何も出さない。 */
+private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): ToolbarNotice? = when (state) {
+    UpdateState.Idle -> null
+    is UpdateState.Available -> ToolbarNotice("新しい版 ${state.release.version} に更新して再起動", onInstall)
+    is UpdateState.Installing -> ToolbarNotice("新しい版 ${state.release.version} を取得中…", onClick = null)
+    is UpdateState.Failed -> ToolbarNotice("更新できませんでした。もう一度試す", onInstall)
 }
 
 private fun trayStateOf(state: MainUiState): TrayState = when {

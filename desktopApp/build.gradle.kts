@@ -16,8 +16,10 @@ dependencies {
 
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutinesSwing)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {
@@ -29,6 +31,19 @@ val appPackageName = "legirss"
 
 // 版数は配布物を作るときに -Plegirss.version で渡す。渡さなければ既定値を使う。
 val appVersion = providers.gradleProperty("legirss.version").getOrElse("0.1.0")
+
+// アプリが自分の版を知るための値を、リソースとして埋め込む。
+val versionResourceDir = layout.buildDirectory.dir("generated/version")
+val generateVersionProperties = tasks.register<WriteProperties>("generateVersionProperties") {
+    destinationFile = versionResourceDir.map { it.file("legirss-version.properties") }
+    property("version", appVersion)
+}
+
+sourceSets["main"].resources.srcDir(versionResourceDir)
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(generateVersionProperties)
+}
 
 compose.desktop {
     application {
