@@ -77,6 +77,14 @@ insertChannel:
 INSERT INTO channel (node_id, feed_url, site_url, title, paused, first_fetch_as_read)
 VALUES (?, ?, ?, ?, ?, ?);
 
+-- 同じ親の下の末尾に置くときの position。
+selectNextPosition:
+SELECT coalesce(max(position), -1) + 1 FROM node WHERE parent_id IS ?;
+
+-- 購読を再開するときに数え直せるよう、フィードが無くなったことを示す応答の記録も消す。
+setChannelsPaused:
+UPDATE channel SET paused = ?, gone_count = 0, gone_at = NULL WHERE node_id IN ?;
+
 lastInsertRowId:
 SELECT last_insert_rowid();
 

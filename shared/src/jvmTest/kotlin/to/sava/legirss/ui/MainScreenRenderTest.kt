@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import to.sava.legirss.feed.FeedCandidate
 import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
@@ -20,42 +21,18 @@ import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
+import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** 何もしない操作。描画だけを確かめるときに渡す。 */
-private object NoActions : MainActions {
-    override fun selectNode(selection: NodeSelection) = Unit
-
-    override fun toggleNode(selection: NodeSelection) = Unit
-
-    override fun setFilter(filter: StateFilter) = Unit
-
-    override fun cycleFilter() = Unit
-
-    override fun sortBy(column: ArticleColumn) = Unit
-
-    override fun selectArticle(index: Int) = Unit
-
-    override fun readOn() = Unit
-
-    override fun cycleSelectedState(forward: Boolean) = Unit
-
-    override fun deleteSelectedArticle() = Unit
-
-    override fun openSelectedArticle() = Unit
-
-    override fun openLink(url: String) = Unit
-
-    override fun updateAll() = Unit
-
-    override fun updateSelected() = Unit
-
-    override fun reloadList() = Unit
-}
+/** 何もしない操作。描画だけを確かめるときに渡す。どの操作も値を返さないので、呼び出しを受けて捨てる。 */
+private val NoActions: MainActions = Proxy.newProxyInstance(
+    MainActions::class.java.classLoader,
+    arrayOf(MainActions::class.java),
+) { _, _, _ -> null } as MainActions
 
 /** メイン画面を画面に出さずに描画し、画像として保存する。 */
 internal object MainScreenRenderer {
@@ -138,5 +115,22 @@ class MainScreenRenderTest {
         assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
         val pixels = requireNotNull(image.peekPixels()).buffer.bytes
         assertTrue(pixels.toSet().size > 2, "何も描かれていない")
+    }
+
+    /** 手前に出す窓を持つ状態を、窓ごと描画できる。 */
+    @Test
+    fun rendersDialogOverScreen() {
+        val dialog = DialogState.AddChannel(
+            message = "登録するフィードを選んでください",
+            candidates = listOf(
+                FeedCandidate("https://example.com/rss.xml", "サンプル通信 (RSS)"),
+                FeedCandidate("https://example.com/atom.xml", null),
+            ),
+        )
+
+        val image = MainScreenRenderer.render(MainUiState(dialog = dialog))
+        MainScreenRenderer.save(image, Path.of("build", "preview", "dialog.png"))
+
+        assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
     }
 }

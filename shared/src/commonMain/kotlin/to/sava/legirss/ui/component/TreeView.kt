@@ -20,7 +20,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -29,8 +31,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import to.sava.legirss.ui.platform.ListScrollbar
 import to.sava.legirss.ui.theme.LegirssColors
 import to.sava.legirss.ui.theme.LocalLegirssStyle
@@ -60,17 +68,38 @@ private val TOGGLE_SIZE = 14.dp
 private val ICON_TEXT_GAP = 4.dp
 private val SCROLLBAR_WIDTH = 10.dp
 
+/**
+ * @param onContextMenu 行を右クリックしたときに、その行と、押した位置（このツリーの左上からの距離）を伝える。
+ */
 @Composable
 fun <K : Any> TreeView(
     rows: List<TreeRow<K>>,
     selectedKey: K?,
     onSelect: (K) -> Unit,
     onToggle: (K) -> Unit,
+    onContextMenu: (K, IntOffset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val style = LocalLegirssStyle.current
     val listState = rememberLazyListState()
-    Box(modifier.background(style.colors.background)) {
+    val currentRows by rememberUpdatedState(rows)
+    val currentOnContextMenu by rememberUpdatedState(onContextMenu)
+    val rowHeight = style.treeRowHeight
+    val contextMenuDetector = Modifier.pointerInput(rowHeight) {
+        val rowHeightPx = rowHeight.roundToPx()
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type != PointerEventType.Press || !event.buttons.isSecondaryPressed) continue
+                val position = event.changes.first().position
+                // 行の高さは一定なので、押した位置とスクロールの量から行を求める。
+                val scrolled = listState.firstVisibleItemIndex * rowHeightPx + listState.firstVisibleItemScrollOffset
+                currentRows.getOrNull(((position.y + scrolled) / rowHeightPx).toInt())
+                    ?.let { currentOnContextMenu(it.key, position.round()) }
+            }
+        }
+    }
+    Box(modifier.background(style.colors.background).then(contextMenuDetector)) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(rows, key = { it.key }) { row ->
                 TreeRowView(row, selected = row.key == selectedKey, onSelect = onSelect, onToggle = onToggle)

@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedFetcher
+import to.sava.legirss.feed.FeedLocator
 import to.sava.legirss.html.HtmlBlock
 import to.sava.legirss.html.InlineText
 import to.sava.legirss.model.ArticleCount
@@ -72,6 +73,7 @@ class MainViewModelTest {
         return MainViewModel(
             store = store,
             updater = updater,
+            locator = FeedLocator(fetcher, Dispatchers.Unconfined),
             parentScope = backgroundScope,
             parseDispatcher = Dispatchers.Unconfined,
             now = { clockFailure?.let { throw it } ?: clock },
@@ -296,6 +298,56 @@ class MainViewModelTest {
         assertEquals(interval, rightAfterUpdate)
         assertEquals(15_000, later)
         assertEquals(0, overdue)
+    }
+
+    /** URL を指定してチャンネルを追加すると、ツリーに登録されて選ばれ、取得した記事が一覧に出る。窓は閉じる。 */
+    @Test
+    fun addsChannelFromFeedUrl() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        feedBody = freshFeed
+        viewModel.openAddChannel()
+
+        viewModel.submitAddChannel("https://example.com/another")
+        // 取得の応答は別のスレッドで返るので、登録したチャンネルの記事が一覧に出るまで待つ。
+        viewModel.state.first { it.titlesAre("fresh") }
+
+        val added = store.loadTree().single { it.channel?.feedUrl == "https://example.com/another" }
+        assertEquals("Feed", added.name)
+        assertEquals(NodeSelection.Node(added.id), viewModel.state.value.selectedNode)
+        assertNull(viewModel.state.value.dialog)
+    }
+
+    private fun MainUiState.titlesAre(vararg titles: String) = articles.map { it.title } == titles.toList()
+
+    /** 登録済みのフィードを指定されたら一度知らせて登録せず、同じフィードをもう一度指定されたら登録する。 */
+    @Test
+    fun asksBeforeAddingDuplicateFeed() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.openAddChannel()
+
+        viewModel.submitAddChannel("https://example.com/feed")
+        val asked = viewModel.state.first { (it.dialog as? DialogState.AddChannel)?.duplicateUrl != null }
+        val channelsWhenAsked = store.loadTree().size
+        viewModel.submitAddChannel("https://example.com/feed")
+        viewModel.state.first { it.dialog == null }
+
+        assertEquals("このフィードは登録済みです。もう一度「追加」を押すと重ねて登録します", (asked.dialog as DialogState.AddChannel).message)
+        assertEquals(1, channelsWhenAsked)
+        assertEquals(2, store.loadTree().size)
+    }
+
+    /** 購読中止にしたチャンネルは更新の対象から外れ、再開すると対象に戻る。 */
+    @Test
+    fun pausesAndResumesChannel() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val channel = NodeSelection.Node(store.loadTree().single().id)
+
+        viewModel.setNodePaused(channel, paused = true)
+        val targetsWhilePaused = store.loadUpdateTargets(channelIds = null).size
+        viewModel.setNodePaused(channel, paused = false)
+
+        assertEquals(0, targetsWhilePaused)
+        assertEquals(1, store.loadUpdateTargets(channelIds = null).size)
     }
 
     /** 更新すると新着が一覧に入り、結果がステータスに出る。一覧を並べ直すので選択は外れる。 */

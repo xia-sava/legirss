@@ -40,7 +40,17 @@ interface MainActions {
 
     fun updateSelected()
 
+    fun updateNode(selection: NodeSelection)
+
+    fun setNodePaused(selection: NodeSelection, paused: Boolean)
+
     fun reloadList()
+
+    fun openAddChannel()
+
+    fun submitAddChannel(url: String)
+
+    fun closeDialog()
 }
 
 /**
@@ -61,6 +71,7 @@ fun MainActions.handleKey(
     when {
         event.key == Key.F2 && event.isAltPressed -> updateSelected()
         event.key == Key.F2 -> updateAll()
+        event.key == Key.F3 -> openAddChannel()
         event.key == Key.F5 -> reloadList()
         event.key == Key.K && event.isCtrlPressed -> cycleFilter()
         // 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の未読へ進む。

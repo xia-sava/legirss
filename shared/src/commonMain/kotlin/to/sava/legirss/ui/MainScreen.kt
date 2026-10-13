@@ -20,7 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -30,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import to.sava.legirss.model.ArticleRow
@@ -37,10 +41,14 @@ import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.DataTable
 import to.sava.legirss.ui.component.HorizontalSplit
 import to.sava.legirss.ui.component.HtmlContent
+import to.sava.legirss.ui.component.MenuEntry
+import to.sava.legirss.ui.component.PopupMenu
 import to.sava.legirss.ui.component.SegmentedButtons
 import to.sava.legirss.ui.component.TableColumn
 import to.sava.legirss.ui.component.TableText
 import to.sava.legirss.ui.component.ToolbarButton
+import to.sava.legirss.ui.component.TreeIcon
+import to.sava.legirss.ui.component.TreeRow
 import to.sava.legirss.ui.component.TreeView
 import to.sava.legirss.ui.component.VerticalSplit
 import to.sava.legirss.ui.platform.ContentScrollbar
@@ -59,6 +67,12 @@ private val ARTICLE_TITLE_EXTRA_SIZE = 3.sp
 private const val UPDATE_ALL_LABEL = "更新"
 private const val UPDATE_SELECTED_LABEL = "選択更新"
 private const val CANCEL_UPDATE_LABEL = "中止"
+private const val ADD_CHANNEL_LABEL = "追加"
+
+private const val UPDATE_NODE_LABEL = "更新"
+private const val PAUSE_LABEL = "購読中止"
+private const val RESUME_LABEL = "購読再開"
+private const val ADD_CHANNEL_MENU_LABEL = "チャンネルの追加…"
 
 /**
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
@@ -75,21 +89,28 @@ fun MainScreen(
     modifier: Modifier = Modifier,
 ) {
     val style = LocalLegirssStyle.current
-    Column(modifier.fillMaxSize().background(style.colors.panel)) {
+    Box(modifier.fillMaxSize()) {
+        MainContent(state, actions, articleScroll, layout, onLayoutChange)
+        state.dialog?.let { DialogHost(it, actions) }
+    }
+}
+
+@Composable
+private fun MainContent(
+    state: MainUiState,
+    actions: MainActions,
+    articleScroll: ScrollState,
+    layout: ScreenLayout,
+    onLayoutChange: (ScreenLayout) -> Unit,
+) {
+    val style = LocalLegirssStyle.current
+    Column(Modifier.fillMaxSize().background(style.colors.panel)) {
         Toolbar(state, actions)
         HorizontalSplit(
             firstWidth = layout.treeWidth,
             onFirstWidthChange = { onLayoutChange(layout.copy(treeWidth = it)) },
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            first = {
-                TreeView(
-                    rows = state.treeRows,
-                    selectedKey = state.selectedNode,
-                    onSelect = actions::selectNode,
-                    onToggle = actions::toggleNode,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            },
+            first = { TreePane(state, actions) },
             second = {
                 VerticalSplit(
                     firstHeight = layout.listHeight,
@@ -111,6 +132,46 @@ fun MainScreen(
     }
 }
 
+/** ツリーと、行を右クリックしたときのメニュー。 */
+@Composable
+private fun TreePane(state: MainUiState, actions: MainActions) {
+    // メニューを出している行と、出す位置。出していなければ null。
+    var menu by remember { mutableStateOf<Pair<NodeSelection, IntOffset>?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        TreeView(
+            rows = state.treeRows,
+            selectedKey = state.selectedNode,
+            onSelect = actions::selectNode,
+            onToggle = actions::toggleNode,
+            onContextMenu = { key, position ->
+                actions.selectNode(key)
+                menu = key to position
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+        menu?.let { (key, position) ->
+            state.treeRows.firstOrNull { it.key == key }?.let { row ->
+                PopupMenu(treeMenuEntries(row, actions), position, onDismiss = { menu = null })
+            }
+        }
+    }
+}
+
+private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): List<MenuEntry?> = buildList {
+    add(MenuEntry(UPDATE_NODE_LABEL) { actions.updateNode(row.key) })
+    when (row.icon) {
+        TreeIcon.ALL -> Unit
+        TreeIcon.GROUP -> {
+            add(MenuEntry(PAUSE_LABEL) { actions.setNodePaused(row.key, paused = true) })
+            add(MenuEntry(RESUME_LABEL) { actions.setNodePaused(row.key, paused = false) })
+        }
+        TreeIcon.CHANNEL_PAUSED -> add(MenuEntry(RESUME_LABEL) { actions.setNodePaused(row.key, paused = false) })
+        TreeIcon.CHANNEL, TreeIcon.CHANNEL_ERROR -> add(MenuEntry(PAUSE_LABEL) { actions.setNodePaused(row.key, paused = true) })
+    }
+    add(null)
+    add(MenuEntry(ADD_CHANNEL_MENU_LABEL, onClick = actions::openAddChannel))
+}
+
 @Composable
 private fun Toolbar(state: MainUiState, actions: MainActions) {
     val style = LocalLegirssStyle.current
@@ -121,6 +182,7 @@ private fun Toolbar(state: MainUiState, actions: MainActions) {
     ) {
         ToolbarButton(if (updating) CANCEL_UPDATE_LABEL else UPDATE_ALL_LABEL, onClick = actions::updateAll)
         if (!updating) ToolbarButton(UPDATE_SELECTED_LABEL, onClick = actions::updateSelected)
+        ToolbarButton(ADD_CHANNEL_LABEL, onClick = actions::openAddChannel)
         Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
         SegmentedButtons(
             options = StateFilter.entries,

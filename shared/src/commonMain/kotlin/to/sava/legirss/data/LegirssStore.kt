@@ -228,6 +228,25 @@ class LegirssStore(
         }
     }
 
+    /**
+     * チャンネルを [parentId] の下の末尾に登録する。[parentId] が null なら最上位に置く。
+     *
+     * @return 登録したチャンネルのノード ID。
+     */
+    suspend fun addChannel(parentId: Long?, name: String, feedUrl: String): Long = access {
+        database.transactionWithResult {
+            queries.insertNode(parentId, queries.selectNextPosition(parentId).executeAsOne(), NodeKind.CHANNEL.code, name)
+            queries.lastInsertRowId().executeAsOne().also { nodeId ->
+                queries.insertChannel(nodeId, feedUrl, site_url = null, title = null, paused = 0L, first_fetch_as_read = 0L)
+            }
+        }
+    }
+
+    /** チャンネルを購読中止にする、または購読を再開する。 */
+    suspend fun setChannelsPaused(channelIds: Collection<Long>, paused: Boolean) = access {
+        queries.setChannelsPaused(if (paused) 1L else 0L, channelIds)
+    }
+
     /** [nodes] を最上位に登録する。 */
     suspend fun importNodes(nodes: List<NewNode>) = access {
         database.transaction { insertNodes(parentId = null, nodes) }

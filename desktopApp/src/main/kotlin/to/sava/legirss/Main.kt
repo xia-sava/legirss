@@ -37,6 +37,7 @@ import to.sava.legirss.data.DatabaseBackup
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedHttp
+import to.sava.legirss.feed.FeedLocator
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
@@ -79,9 +80,10 @@ fun main(args: Array<String>) {
     Thread.setDefaultUncaughtExceptionHandler { _, exception -> AppLog.error("処理されなかった例外", exception) }
 
     val store = LegirssStore(DatabaseFactory.open(dataDir), Dispatchers.IO)
+    val fetcher = FeedHttp.createFetcher()
     val updater = FeedUpdater(
         store = store,
-        fetcher = FeedHttp.createFetcher(),
+        fetcher = fetcher,
         parseDispatcher = Dispatchers.Default,
         now = System::currentTimeMillis,
         reportError = AppLog::error,
@@ -100,6 +102,7 @@ fun main(args: Array<String>) {
             MainViewModel(
                 store = store,
                 updater = updater,
+                locator = FeedLocator(fetcher, Dispatchers.Default),
                 parentScope = scope,
                 parseDispatcher = Dispatchers.Default,
                 now = System::currentTimeMillis,
@@ -157,11 +160,14 @@ fun main(args: Array<String>) {
             title = APP_NAME,
             state = windowState,
             onKeyEvent = { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-                    windowVisible = false
-                    true
-                } else {
-                    viewModel.handleKey(event, state.selectedArticle != null, articleScroll, scope)
+                when {
+                    // 窓を手前に出している間は、後ろの画面のキー操作を受け付けない。
+                    state.dialog != null -> false
+                    event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
+                        windowVisible = false
+                        true
+                    }
+                    else -> viewModel.handleKey(event, state.selectedArticle != null, articleScroll, scope)
                 }
             },
         ) {

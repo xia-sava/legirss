@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import to.sava.legirss.data.LegirssStore
+import to.sava.legirss.feed.FeedLocator
+import to.sava.legirss.feed.FeedLookup
 import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
@@ -27,6 +29,8 @@ import to.sava.legirss.update.UpdateProgress
 class MainViewModel(
     private val store: LegirssStore,
     private val updater: FeedUpdater,
+    /** チャンネルを追加するときに、入力された URL からフィードを探す。 */
+    private val locator: FeedLocator,
     parentScope: CoroutineScope,
     /** 記事の本文の解釈に使う。 */
     private val parseDispatcher: CoroutineDispatcher,
@@ -63,6 +67,9 @@ class MainViewModel(
 
     private var updateJob: Job? = null
     private var contentJob: Job? = null
+
+    /** 手前に出している窓が進めている処理。 */
+    private var dialogJob: Job? = null
     private var windowVisible = true
 
     init {
@@ -75,7 +82,9 @@ class MainViewModel(
         scope.launch { reload() }
     }
 
+    /** ノードを選ぶ。選択はすぐに切り替え、記事の一覧は読み出しが済んでから差し替える。 */
     override fun selectNode(selection: NodeSelection) {
+        mutableState.update { it.copy(selectedNode = selection).withTree() }
         scope.launch { showNode(selection) }
     }
 
@@ -166,17 +175,86 @@ class MainViewModel(
 
     /** 全てのチャンネルを更新する。更新中なら中止する。 */
     override fun updateAll() {
-        startOrCancelUpdate(allChannels = true)
+        startOrCancelUpdate(channelIds = null)
     }
 
     /** 選んでいるノード以下のチャンネルを更新する。更新中なら中止する。 */
     override fun updateSelected() {
-        startOrCancelUpdate(allChannels = false)
+        updateNode(mutableState.value.selectedNode)
+    }
+
+    /** [selection] 以下のチャンネルを更新する。更新中なら中止する。 */
+    override fun updateNode(selection: NodeSelection) {
+        startOrCancelUpdate(tree.channelIdsUnder(selection))
+    }
+
+    /** [selection] 以下のチャンネルを購読中止にする、または購読を再開する。「全ての記事」に対しては何もしない。 */
+    override fun setNodePaused(selection: NodeSelection, paused: Boolean) {
+        val channelIds = tree.channelIdsUnder(selection) ?: return
+        scope.launch {
+            store.setChannelsPaused(channelIds, paused)
+            reloadTree()
+        }
     }
 
     /** 一覧を読み直して並べ直す。 */
     override fun reloadList() {
         scope.launch { reload() }
+    }
+
+    override fun openAddChannel() {
+        mutableState.update { it.copy(dialog = DialogState.AddChannel()) }
+    }
+
+    /** 手前に出している窓を閉じる。窓が進めていた処理は取り消し、フォーカスを一覧へ戻す。 */
+    override fun closeDialog() {
+        dialogJob?.cancel()
+        mutableState.update { it.copy(dialog = null, listFocusRequest = it.listFocusRequest + 1) }
+    }
+
+    /**
+     * [url] からフィードを探し、1 つに決まれば登録する。
+     *
+     * ページが複数のフィードを案内していれば、候補を窓に出して選ばせる。
+     * 登録済みのフィードなら一度知らせ、同じフィードをもう一度指定されたら重ねて登録する。
+     */
+    override fun submitAddChannel(url: String) {
+        val dialog = mutableState.value.dialog as? DialogState.AddChannel ?: return
+        if (dialog.busy || url.isBlank()) return
+        updateAddChannelDialog { it.copy(busy = true, message = null) }
+        dialogJob = scope.launch {
+            try {
+                when (val lookup = locator.locate(url)) {
+                    is FeedLookup.Failed -> updateAddChannelDialog { it.copy(message = lookup.reason, candidates = emptyList()) }
+                    is FeedLookup.Candidates ->
+                        updateAddChannelDialog { it.copy(message = CHOOSE_FEED_MESSAGE, candidates = lookup.candidates) }
+                    is FeedLookup.Found -> when {
+                        tree.hasFeed(lookup.feedUrl) && dialog.duplicateUrl != lookup.feedUrl ->
+                            updateAddChannelDialog { it.copy(message = DUPLICATE_FEED_MESSAGE, duplicateUrl = lookup.feedUrl) }
+                        else -> registerChannel(lookup)
+                    }
+                }
+            } finally {
+                updateAddChannelDialog { it.copy(busy = false) }
+            }
+        }
+    }
+
+    private fun updateAddChannelDialog(change: (DialogState.AddChannel) -> DialogState.AddChannel) {
+        mutableState.update { state -> (state.dialog as? DialogState.AddChannel)?.let { state.copy(dialog = change(it)) } ?: state }
+    }
+
+    /** フィードをチャンネルとして登録して選び、記事を取得する。 */
+    private suspend fun registerChannel(feed: FeedLookup.Found) {
+        val parentId = tree.parentForNewNode(mutableState.value.selectedNode)
+        val channelId = store.addChannel(parentId, feed.title?.takeIf(String::isNotBlank) ?: feed.feedUrl, feed.feedUrl)
+        expanded = expanded + NodeSelection.All + listOfNotNull(parentId?.let(NodeSelection::Node))
+        mutableState.update { it.copy(dialog = null, listFocusRequest = it.listFocusRequest + 1) }
+        reloadTree()
+        showNode(NodeSelection.Node(channelId))
+        // 進み具合の表示は 1 つの更新のものなので、動いている更新があれば終わるのを待つ。
+        updateJob?.join()
+        launchUpdate(listOf(channelId), automatic = false)
     }
 
     /** 画面の配置などの設定を保存する。[settings] に無い名前の設定は変えない。 */
@@ -190,7 +268,7 @@ class MainViewModel(
      * ウィンドウを表示している間は、読んでいる途中で行が動かないよう、終わっても一覧を並べ直さない。
      */
     fun updateAutomatically(): Job =
-        updateJob?.takeIf { it.isActive } ?: launchUpdate(allChannels = true, automatic = true)
+        updateJob?.takeIf { it.isActive } ?: launchUpdate(channelIds = null, automatic = true)
 
     /** 次の定期更新までの待ち時間。前回の全体更新から [intervalMillis] が過ぎていれば 0。 */
     suspend fun millisUntilNextAutomaticUpdate(intervalMillis: Long): Long {
@@ -219,18 +297,20 @@ class MainViewModel(
         scope.launch { reload() }
     }
 
-    private fun startOrCancelUpdate(allChannels: Boolean) {
+    private fun startOrCancelUpdate(channelIds: Collection<Long>?) {
         updateJob?.takeIf { it.isActive }?.let { running ->
             running.cancel()
             return
         }
-        launchUpdate(allChannels, automatic = false)
+        launchUpdate(channelIds, automatic = false)
     }
 
-    private fun launchUpdate(allChannels: Boolean, automatic: Boolean): Job = scope.launch {
+    /** [channelIds] のチャンネルを更新する。null なら全てのチャンネルを更新する。 */
+    private fun launchUpdate(channelIds: Collection<Long>?, automatic: Boolean): Job = scope.launch {
+        val allChannels = channelIds == null
         mutableState.update { it.copy(statusMessage = null) }
         try {
-            val result = updater.update(if (allChannels) null else tree.channelIdsUnder(mutableState.value.selectedNode))
+            val result = updater.update(channelIds)
             mutableState.update { it.copy(statusMessage = summaryOf(result)) }
         } catch (cancellation: CancellationException) {
             mutableState.update { it.copy(statusMessage = UPDATE_CANCELLED_MESSAGE) }
@@ -312,6 +392,8 @@ class MainViewModel(
     private companion object {
         const val UPDATE_CANCELLED_MESSAGE = "更新を中止しました"
         const val UNEXPECTED_ERROR_MESSAGE = "エラーが発生しました"
+        const val CHOOSE_FEED_MESSAGE = "登録するフィードを選んでください"
+        const val DUPLICATE_FEED_MESSAGE = "このフィードは登録済みです。もう一度「追加」を押すと重ねて登録します"
 
         /** 全体の更新を最後に試みた時刻を保存する設定の名前。 */
         const val LAST_UPDATE_KEY = "last_update_at"

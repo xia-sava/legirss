@@ -1,5 +1,6 @@
 package to.sava.legirss.ui
 
+import to.sava.legirss.feed.FeedCandidate
 import to.sava.legirss.html.HtmlBlock
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
@@ -58,6 +59,20 @@ data class ArticleContent(
     val blocks: List<HtmlBlock>,
 )
 
+/** 画面の手前に出して、入力や確認を求める窓。 */
+sealed interface DialogState {
+    /** チャンネルの追加。 */
+    data class AddChannel(
+        /** 入力された URL を確かめている最中か。 */
+        val busy: Boolean = false,
+        val message: String? = null,
+        /** 入力されたページが案内していたフィード。ここから選ばせる。 */
+        val candidates: List<FeedCandidate> = emptyList(),
+        /** 登録済みだと知らせたフィードの URL。同じフィードをもう一度指定されたら、重ねて登録する。 */
+        val duplicateUrl: String? = null,
+    ) : DialogState
+}
+
 data class MainUiState(
     val treeRows: List<TreeRow<NodeSelection>> = emptyList(),
     val selectedNode: NodeSelection = NodeSelection.All,
@@ -78,6 +93,8 @@ data class MainUiState(
     val statusMessage: String? = null,
     /** 値が変わるたびに、記事の一覧へフォーカスを移す。 */
     val listFocusRequest: Int = 0,
+    /** 手前に出している窓。出していなければ null。 */
+    val dialog: DialogState? = null,
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
 
@@ -125,6 +142,19 @@ class TreeModel(
         NodeSelection.All -> totalCount
         is NodeSelection.Node -> byId[selection.id]?.let(::countOf) ?: ArticleCount.ZERO
     }
+
+    fun nodeOf(selection: NodeSelection): TreeNode? = (selection as? NodeSelection.Node)?.let { byId[it.id] }
+
+    /**
+     * [selection] を選んでいるときに足すノードの親。最上位に足すなら null。
+     *
+     * グループを選んでいればその中に、チャンネルを選んでいればそれと同じ親の下に足す。
+     */
+    fun parentForNewNode(selection: NodeSelection): Long? =
+        nodeOf(selection)?.let { node -> if (node.kind == NodeKind.GROUP) node.id else node.parentId }
+
+    /** [feedUrl] のフィードを購読するチャンネルが登録されているか。 */
+    fun hasFeed(feedUrl: String): Boolean = byId.values.any { it.channel?.feedUrl == feedUrl }
 
     /** [selection] の配下にあるチャンネルの ID。「全ての記事」なら null（絞り込まない）。 */
     fun channelIdsUnder(selection: NodeSelection): List<Long>? = when (selection) {
