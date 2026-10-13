@@ -20,6 +20,7 @@ import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NewArticle
 import to.sava.legirss.model.NewChannel
 import to.sava.legirss.model.Retention
+import to.sava.legirss.opml.Opml
 import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.update.FeedUpdater
 import kotlin.test.Test
@@ -33,6 +34,17 @@ class MainViewModelTest {
 
     private val openedUrls = mutableListOf<String>()
     private val copiedTexts = mutableListOf<String>()
+
+    /** 読み込むファイルとして返す中身。null なら、利用者が選ばずに閉じたものとして扱う。 */
+    private var opmlToPick: String? = null
+
+    /** 書き出された OPML。ファイル名と中身の組。 */
+    private val savedOpml = mutableListOf<Pair<String, String>>()
+    private val opmlFiles = object : OpmlFiles {
+        override suspend fun pick(): ByteArray? = opmlToPick?.encodeToByteArray()
+
+        override suspend fun save(suggestedName: String, text: String): Boolean = savedOpml.add(suggestedName to text)
+    }
     private var clock = 1_000L
 
     /** null でなければ、時刻を尋ねられたときにこれを投げる。 */
@@ -83,6 +95,7 @@ class MainViewModelTest {
             now = { clockFailure?.let { throw it } ?: clock },
             openUrl = openedUrls::add,
             copyText = copiedTexts::add,
+            opmlFiles = opmlFiles,
             reportError = reportError,
             initialSettings = AppSettings(),
         ).also(MainViewModel::load)
@@ -494,6 +507,47 @@ class MainViewModelTest {
         assertEquals(expected, AppSettings.fromSettings(store.loadSettings()))
         assertEquals(Retention(keepCount = 20, keepDays = 7), store.loadRetention())
         assertNull(viewModel.state.value.dialog)
+    }
+
+    /** OPML を読み込むと、登録済みのフィードを除いたチャンネルとグループが最上位の末尾に入り、件数がステータスに出る。 */
+    @Test
+    fun importsOpmlSkippingKnownFeeds() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        opmlToPick = "<opml version=\"2.0\"><body>" +
+            "<outline text=\"Known\" xmlUrl=\"https://example.com/feed\"/>" +
+            "<outline text=\"News\"><outline text=\"Alpha\" xmlUrl=\"https://alpha.example/feed\"/></outline>" +
+            "</body></opml>"
+
+        viewModel.importOpml()
+
+        assertEquals(listOf("全ての記事 (2/3)", "Example (2/3)", "News"), viewModel.treeLabels)
+        assertEquals(listOf("Example", "News", "Alpha"), store.loadTree().map { it.name })
+        assertEquals("OPML を読み込みました  チャンネル 1 件", viewModel.state.value.statusMessage)
+    }
+
+    /** OPML でないファイルを選ぶと、何も取り込まずに、読めなかったことをステータスに出す。 */
+    @Test
+    fun rejectsFileThatIsNotOpml() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        opmlToPick = "<html><body>page</body></html>"
+
+        viewModel.importOpml()
+
+        assertEquals(1, store.loadTree().size)
+        assertEquals("OPML として読めません", viewModel.state.value.statusMessage)
+    }
+
+    /** 全体を書き出すと、登録しているチャンネルを含む OPML が、アプリの名前のファイル名で保存先へ渡る。 */
+    @Test
+    fun exportsWholeTreeAsOpml() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.exportOpml(NodeSelection.All)
+
+        val (name, text) = savedOpml.single()
+        assertEquals("legirss.opml", name)
+        assertEquals("https://example.com/feed", (Opml.parse(text)?.single() as NewChannel).feedUrl)
+        assertEquals("OPML を書き出しました", viewModel.state.value.statusMessage)
     }
 
     /** フィードの URL を変えると、次の更新は新しい URL から取得する。 */

@@ -54,6 +54,28 @@ class OpmlTest {
         assertNull(Opml.parse("not xml"))
     }
 
+    /** 登録済みのフィードと、同じフィードの 2 つ目以降を除く。それでチャンネルが無くなったグループも除く。 */
+    @Test
+    fun dropsKnownAndRepeatedFeeds() {
+        val nodes = listOf(
+            NewGroup("Known only", listOf(newChannel("Alpha", "https://alpha.example/feed"))),
+            NewGroup("Mixed", listOf(newChannel("Alpha again", "https://alpha.example/feed"), newChannel("Beta", "https://beta.example/rss"))),
+            newChannel("Beta again", "https://beta.example/rss"),
+            newChannel("Gamma", "https://gamma.example/atom"),
+        )
+
+        val kept = Opml.withoutKnownFeeds(nodes, knownFeedUrls = setOf("https://alpha.example/feed"))
+
+        assertEquals(
+            listOf(
+                NewGroup("Mixed", listOf(newChannel("Beta", "https://beta.example/rss"))),
+                newChannel("Gamma", "https://gamma.example/atom"),
+            ),
+            kept,
+        )
+        assertEquals(2, Opml.countChannels(kept))
+    }
+
     private fun channel(id: Long, parentId: Long?, position: Long, name: String, feedUrl: String, siteUrl: String? = null) = TreeNode(
         id = id,
         parentId = parentId,

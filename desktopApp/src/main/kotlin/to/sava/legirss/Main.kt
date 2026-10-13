@@ -111,6 +111,7 @@ fun main(args: Array<String>) {
                 now = System::currentTimeMillis,
                 openUrl = ::openInBrowser,
                 copyText = ::copyToClipboard,
+                opmlFiles = DesktopOpmlFiles(Dispatchers.IO),
                 reportError = AppLog::error,
                 initialSettings = AppSettings.fromSettings(settings),
             ).also(MainViewModel::load)

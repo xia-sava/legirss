@@ -297,21 +297,22 @@ class LegirssStore(
         queries.setChannelsPaused(if (paused) 1L else 0L, channelIds)
     }
 
-    /** [nodes] を最上位に登録する。 */
+    /** [nodes] を、最上位の末尾に登録する。 */
     suspend fun importNodes(nodes: List<NewNode>) = access {
         database.transaction { insertNodes(parentId = null, nodes) }
     }
 
     private fun insertNodes(parentId: Long?, nodes: List<NewNode>) {
+        val firstPosition = queries.selectNextPosition(parentId).executeAsOne()
         nodes.forEachIndexed { index, node ->
             when (node) {
                 is NewGroup -> {
-                    queries.insertNode(parentId, index.toLong(), NodeKind.GROUP.code, node.name)
+                    queries.insertNode(parentId, firstPosition + index, NodeKind.GROUP.code, node.name)
                     insertNodes(queries.lastInsertRowId().executeAsOne(), node.children)
                 }
 
                 is NewChannel -> {
-                    queries.insertNode(parentId, index.toLong(), NodeKind.CHANNEL.code, node.name)
+                    queries.insertNode(parentId, firstPosition + index, NodeKind.CHANNEL.code, node.name)
                     insertChannel(queries.lastInsertRowId().executeAsOne(), node)
                 }
             }

@@ -79,6 +79,10 @@ interface MainActions {
 
     fun moveNode(source: NodeSelection, target: NodeSelection, place: TreeDropPlace)
 
+    fun importOpml()
+
+    fun exportOpml(selection: NodeSelection)
+
     fun openSettings()
 
     fun submitSettings(settings: AppSettings)

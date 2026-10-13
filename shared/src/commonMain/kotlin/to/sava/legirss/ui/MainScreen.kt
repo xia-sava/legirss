@@ -100,6 +100,8 @@ private const val RENAME_MENU_LABEL = "名前の変更…"
 private const val CHANGE_FEED_URL_MENU_LABEL = "フィードの URL の変更…"
 private const val DELETE_MENU_LABEL = "削除…"
 private const val SORT_BY_NAME_MENU_LABEL = "中を名前の順に並べ直す"
+private const val IMPORT_OPML_MENU_LABEL = "OPML の読み込み…"
+private const val EXPORT_OPML_MENU_LABEL = "OPML の書き出し…"
 
 private const val OPEN_IN_BROWSER_LABEL = "ブラウザで開く"
 private const val MARK_UNREAD_LABEL = "未読にする"
@@ -262,6 +264,9 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
     if (!isChannel) {
         add(null)
         add(MenuEntry(SORT_BY_NAME_MENU_LABEL) { actions.sortChildrenByName(row.key) })
+        add(null)
+        if (row.icon == TreeIcon.ALL) add(MenuEntry(IMPORT_OPML_MENU_LABEL, onClick = actions::importOpml))
+        add(MenuEntry(EXPORT_OPML_MENU_LABEL) { actions.exportOpml(row.key) })
     }
 }
 

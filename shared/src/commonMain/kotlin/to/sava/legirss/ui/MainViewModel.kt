@@ -17,9 +17,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.io.IOException
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedLocator
 import to.sava.legirss.feed.FeedLookup
+import to.sava.legirss.feed.FeedText
+import to.sava.legirss.opml.Opml
 import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleCount
@@ -45,6 +48,7 @@ class MainViewModel(
     private val openUrl: (String) -> Unit,
     /** 文字をクリップボードへ写す。 */
     private val copyText: (String) -> Unit,
+    private val opmlFiles: OpmlFiles,
     /** 想定していない失敗を、説明と原因を添えて記録する。 */
     private val reportError: (String, Throwable) -> Unit,
     /** 起動した時点で保存されていた設定。 */
@@ -382,6 +386,53 @@ class MainViewModel(
         }
     }
 
+    /**
+     * 利用者が選んだ OPML のファイルから、チャンネルとグループを最上位の末尾へ取り込む。
+     *
+     * 登録済みのフィードは取り込まない。
+     */
+    override fun importOpml() {
+        scope.launch {
+            val bytes = try {
+                opmlFiles.pick() ?: return@launch
+            } catch (exception: IOException) {
+                reportFileFailure(OPML_READ_FAILED_MESSAGE, exception)
+                return@launch
+            }
+            val nodes = withContext(parseDispatcher) { Opml.parse(FeedText.decode(bytes, httpCharset = null)) }
+            if (nodes == null) {
+                mutableState.update { it.copy(statusMessage = NOT_OPML_MESSAGE) }
+                return@launch
+            }
+            val added = Opml.withoutKnownFeeds(nodes, tree.feedUrls)
+            store.importNodes(added)
+            mutableState.update { it.copy(statusMessage = "OPML を読み込みました  チャンネル ${Opml.countChannels(added)} 件") }
+            reloadTree()
+        }
+    }
+
+    /** [selection] のグループの中（「全ての記事」なら全体）を、利用者が選んだ場所へ OPML として書き出す。 */
+    override fun exportOpml(selection: NodeSelection) {
+        val group = tree.nodeOf(selection)
+        if (group != null && group.kind != NodeKind.GROUP) return
+        val name = group?.name ?: APP_NAME
+        val text = Opml.write(nodes, parentId = group?.id, title = name)
+        scope.launch {
+            try {
+                if (opmlFiles.save("${name.replace(unsafeFileNameCharacters, "_")}$OPML_EXTENSION", text)) {
+                    mutableState.update { it.copy(statusMessage = OPML_WRITTEN_MESSAGE) }
+                }
+            } catch (exception: IOException) {
+                reportFileFailure(OPML_WRITE_FAILED_MESSAGE, exception)
+            }
+        }
+    }
+
+    private fun reportFileFailure(message: String, exception: IOException) {
+        reportError(message, exception)
+        mutableState.update { it.copy(statusMessage = message) }
+    }
+
     private fun updateAddChannelDialog(change: (DialogState.AddChannel) -> DialogState.AddChannel) {
         mutableState.update { state -> (state.dialog as? DialogState.AddChannel)?.let { state.copy(dialog = change(it)) } ?: state }
     }
@@ -555,6 +606,16 @@ class MainViewModel(
         const val DUPLICATE_FEED_MESSAGE = "このフィードは登録済みです。もう一度「追加」を押すと重ねて登録します"
 
         const val MILLIS_PER_MINUTE = 60 * 1000L
+
+        const val APP_NAME = "legirss"
+        const val OPML_EXTENSION = ".opml"
+        const val NOT_OPML_MESSAGE = "OPML として読めません"
+        const val OPML_READ_FAILED_MESSAGE = "ファイルを読めません"
+        const val OPML_WRITE_FAILED_MESSAGE = "ファイルに書けません"
+        const val OPML_WRITTEN_MESSAGE = "OPML を書き出しました"
+
+        /** ファイル名に使えない文字。 */
+        val unsafeFileNameCharacters = Regex("""[\\/:*?"<>|]""")
 
         /** 全体の更新を最後に試みた時刻を保存する設定の名前。 */
         const val LAST_UPDATE_KEY = "last_update_at"

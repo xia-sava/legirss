@@ -42,6 +42,28 @@ object Opml {
         )
     }
 
+    /**
+     * [nodes] から、[knownFeedUrls] にあるフィードのチャンネルと、同じフィードの 2 つ目以降のチャンネルを除く。
+     *
+     * 除いた結果、チャンネルが 1 つも残らないグループも除く。
+     */
+    fun withoutKnownFeeds(nodes: List<NewNode>, knownFeedUrls: Set<String>): List<NewNode> {
+        val seen = knownFeedUrls.toMutableSet()
+
+        fun keep(node: NewNode): NewNode? = when (node) {
+            is NewChannel -> node.takeIf { seen.add(it.feedUrl) }
+            is NewGroup -> node.children.mapNotNull(::keep).takeIf { it.isNotEmpty() }?.let { node.copy(children = it) }
+        }
+        return nodes.mapNotNull(::keep)
+    }
+
+    fun countChannels(nodes: List<NewNode>): Int = nodes.sumOf { node ->
+        when (node) {
+            is NewChannel -> 1
+            is NewGroup -> countChannels(node.children)
+        }
+    }
+
     /** 属性の値を、名前の大文字と小文字を区別せずに引く。無いか、空白だけなら null。 */
     private fun Element.attributeText(name: String): String? =
         attributes().firstOrNull { it.key.equals(name, ignoreCase = true) }?.value?.trim()?.ifEmpty { null }

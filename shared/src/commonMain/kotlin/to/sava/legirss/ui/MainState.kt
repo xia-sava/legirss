@@ -232,8 +232,11 @@ class TreeModel(
     private fun isSelfOrDescendant(nodeId: Long?, ancestorId: Long): Boolean =
         generateSequence(nodeId) { byId[it]?.parentId }.any { it == ancestorId }
 
+    /** 登録されている全てのチャンネルのフィードの URL。 */
+    val feedUrls: Set<String> = nodes.mapNotNull { it.channel?.feedUrl }.toSet()
+
     /** [feedUrl] のフィードを購読するチャンネルが登録されているか。 */
-    fun hasFeed(feedUrl: String): Boolean = byId.values.any { it.channel?.feedUrl == feedUrl }
+    fun hasFeed(feedUrl: String): Boolean = feedUrl in feedUrls
 
     /** [selection] の配下にあるチャンネルの ID。「全ての記事」なら null（絞り込まない）。 */
     fun channelIdsUnder(selection: NodeSelection): List<Long>? = when (selection) {
