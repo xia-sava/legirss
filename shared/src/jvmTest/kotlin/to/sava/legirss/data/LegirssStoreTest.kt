@@ -40,6 +40,7 @@ class LegirssStoreTest {
                     siteUrl = null,
                     title = null,
                     paused = false,
+                    firstFetchAsRead = false,
                     articles = listOf(
                         article("a1", ArticleState.UNREAD, 10),
                         article("a2", ArticleState.READ, 20),
@@ -53,6 +54,7 @@ class LegirssStoreTest {
             siteUrl = null,
             title = null,
             paused = true,
+            firstFetchAsRead = false,
             articles = listOf(article("b1", ArticleState.PROTECTED, 30)),
         ),
     )

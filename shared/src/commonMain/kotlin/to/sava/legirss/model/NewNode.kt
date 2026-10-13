@@ -16,6 +16,8 @@ data class NewChannel(
     val siteUrl: String?,
     val title: String?,
     val paused: Boolean,
+    /** 最初に取得したとき、得た記事を既読として登録する。 */
+    val firstFetchAsRead: Boolean,
     val articles: List<NewArticle>,
 ) : NewNode
 

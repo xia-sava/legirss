@@ -1,0 +1,29 @@
+package to.sava.legirss.model
+
+/** チャンネルの直近の更新が失敗した理由。 */
+enum class ChannelError(val code: Long) {
+    NONE(0),
+
+    /** 接続できない、応答が時間内に返らない、など。 */
+    NO_RESPONSE(1),
+
+    /** 成功以外のステータスが返った。 */
+    HTTP_ERROR(2),
+
+    /** 取得できたが、フィードとして読めなかった。 */
+    NOT_A_FEED(3),
+}
+
+/** 更新の対象になるチャンネルと、取得に使う前回の情報。 */
+data class UpdateTarget(
+    val channelId: Long,
+    val feedUrl: String,
+    val etag: String?,
+    val lastModified: String?,
+    /** 次に取得に成功したとき、得た記事を既読として登録する。 */
+    val firstFetchAsRead: Boolean,
+    /** フィードが無くなったことを示す応答を数えた回数。 */
+    val goneCount: Int,
+    /** その応答を最後に数えた時刻。 */
+    val goneAt: Long?,
+)

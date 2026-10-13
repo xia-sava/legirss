@@ -10,12 +10,14 @@ CREATE TABLE node (
 CREATE INDEX node_parent ON node(parent_id, position);
 
 -- チャンネルの付帯情報。node と 1 対 1。
+-- first_fetch_as_read が 1 のチャンネルは、次に取得に成功したとき、得た記事を既読として登録する。
 CREATE TABLE channel (
     node_id INTEGER PRIMARY KEY REFERENCES node(id) ON DELETE CASCADE,
     feed_url TEXT NOT NULL,
     site_url TEXT,
     title TEXT,
     paused INTEGER NOT NULL DEFAULT 0,
+    first_fetch_as_read INTEGER NOT NULL DEFAULT 0,
     etag TEXT,
     last_modified TEXT,
     fetched_at INTEGER,
@@ -72,8 +74,8 @@ INSERT INTO node (parent_id, position, kind, name)
 VALUES (?, ?, ?, ?);
 
 insertChannel:
-INSERT INTO channel (node_id, feed_url, site_url, title, paused)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO channel (node_id, feed_url, site_url, title, paused, first_fetch_as_read)
+VALUES (?, ?, ?, ?, ?, ?);
 
 lastInsertRowId:
 SELECT last_insert_rowid();
@@ -96,3 +98,67 @@ selectArticleCounts:
 SELECT channel_id, COUNT(*) AS total, SUM(state = 0) AS unread
 FROM article
 GROUP BY channel_id;
+
+selectUpdateTargets:
+SELECT node_id, feed_url, etag, last_modified, first_fetch_as_read, gone_count, gone_at
+FROM channel
+WHERE paused = 0;
+
+recordFetchSuccess:
+UPDATE channel
+SET feed_url = ?,
+    site_url = coalesce(?, site_url),
+    title = coalesce(?, title),
+    etag = ?,
+    last_modified = ?,
+    fetched_at = ?,
+    first_fetch_as_read = 0,
+    error_kind = 0,
+    error_detail = NULL,
+    gone_count = 0,
+    gone_at = NULL
+WHERE node_id = ?;
+
+recordNotModified:
+UPDATE channel
+SET feed_url = ?,
+    fetched_at = ?,
+    error_kind = 0,
+    error_detail = NULL,
+    gone_count = 0,
+    gone_at = NULL
+WHERE node_id = ?;
+
+recordFetchFailure:
+UPDATE channel
+SET fetched_at = ?,
+    error_kind = ?,
+    error_detail = ?,
+    gone_count = ?,
+    gone_at = ?,
+    paused = ?
+WHERE node_id = ?;
+
+selectArticleIdentities:
+SELECT identity FROM article WHERE channel_id = ?;
+
+selectSeenIdentities:
+SELECT identity FROM seen WHERE channel_id = ?;
+
+touchSeen:
+UPDATE seen SET seen_at = ? WHERE channel_id = ? AND identity = ?;
+
+updateArticleContent:
+UPDATE article
+SET title = ?, link = ?, summary = ?, content = ?, author = ?, category = ?, published_at = ?
+WHERE channel_id = ? AND identity = ?;
+
+updateArticleState:
+UPDATE article SET state = ? WHERE id = ?;
+
+rememberDeletedArticle:
+INSERT OR REPLACE INTO seen (channel_id, identity, seen_at)
+SELECT channel_id, identity, ? FROM article WHERE id = ?;
+
+deleteArticle:
+DELETE FROM article WHERE id = ?;
