@@ -50,14 +50,11 @@ import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import to.sava.legirss.update.FeedUpdater
-import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.IOException
-import java.net.URI
-import java.net.URISyntaxException
 import java.nio.file.Path
 import java.sql.SQLException
 import java.time.LocalDate
@@ -95,6 +92,7 @@ fun main(args: Array<String>) {
         reportError = AppLog::error,
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
+    val browser = BrowserLauncher()
     val fontFamily = uiFontFamily()
     val windowIcon = BitmapPainter(TrayController.drawIcon(TrayState.UNREAD, WINDOW_ICON_SIZE).toComposeImageBitmap())
     // 最初の描画から保存した配置で出すため、設定は画面を組み立てる前に読み終える。
@@ -113,7 +111,7 @@ fun main(args: Array<String>) {
                 parentScope = scope,
                 parseDispatcher = Dispatchers.Default,
                 now = System::currentTimeMillis,
-                openUrl = ::openInBrowser,
+                openUrl = browser::open,
                 copyText = ::copyToClipboard,
                 opmlFiles = DesktopOpmlFiles(Dispatchers.IO),
                 reportError = AppLog::error,
@@ -194,6 +192,10 @@ fun main(args: Array<String>) {
                 }
             },
         ) {
+            DisposableEffect(window) {
+                browser.ownerWindow = window
+                onDispose { browser.ownerWindow = null }
+            }
             // しまっていたウィンドウを出したときは、ほかのウィンドウの前へ持ってくる。
             LaunchedEffect(windowVisible) {
                 if (windowVisible) {
@@ -285,16 +287,5 @@ private fun copyToClipboard(text: String) {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
     } catch (exception: IllegalStateException) {
         AppLog.warn("クリップボードへ写せません", exception)
-    }
-}
-
-/** URL を既定のブラウザで開く。開けなかった場合は理由を記録する。 */
-private fun openInBrowser(url: String) {
-    try {
-        Desktop.getDesktop().browse(URI(url))
-    } catch (exception: URISyntaxException) {
-        AppLog.warn("URL として扱えません: $url", exception)
-    } catch (exception: IOException) {
-        AppLog.warn("ブラウザで開けません: $url", exception)
     }
 }
