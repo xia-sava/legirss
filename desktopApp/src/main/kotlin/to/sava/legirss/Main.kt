@@ -162,28 +162,6 @@ fun main(args: Array<String>) {
                 }
         }
 
-        val tray = remember {
-            TrayController(
-                onToggleWindow = { windowVisible = !windowVisible },
-                onShowWindow = { windowVisible = true },
-                onUpdate = viewModel::updateAll,
-                onOpenSettings = {
-                    windowVisible = true
-                    viewModel.openSettings()
-                },
-                onExit = ::exitApplication,
-                startup = StartupRegistration.forCurrentProcess(),
-            ).also(TrayController::install)
-        }
-        DisposableEffect(Unit) { onDispose(tray::remove) }
-        LaunchedEffect(state.updateProgress != null, state.totalCount.unread) {
-            tray.update(
-                state = trayStateOf(state),
-                updating = state.updateProgress != null,
-                tooltip = "$APP_NAME  未読 ${state.totalCount.unread} 件",
-            )
-        }
-
         LaunchedEffect(windowVisible) { viewModel.setWindowVisible(windowVisible) }
         LaunchedEffect(Unit) { viewModel.runAutomaticUpdates() }
         LaunchedEffect(Unit) { runDailyBackups(backup) }
@@ -212,6 +190,34 @@ fun main(args: Array<String>) {
         }
         val updateState by appUpdater.state.collectAsState()
         LaunchedEffect(Unit) { appUpdater.runPeriodicChecks(UPDATE_CHECK_INTERVAL_MILLIS) }
+
+        val tray = remember {
+            TrayController(
+                onToggleWindow = { windowVisible = !windowVisible },
+                onShowWindow = { windowVisible = true },
+                onUpdate = viewModel::updateAll,
+                onOpenSettings = {
+                    windowVisible = true
+                    viewModel.openSettings()
+                },
+                // 結果はツールバーに出すので、ウィンドウを表示してから確かめる。
+                onCheckAppUpdate = {
+                    windowVisible = true
+                    appUpdater.checkNow()
+                },
+                canCheckAppUpdate = installer.isSupported,
+                onExit = ::exitApplication,
+                startup = StartupRegistration.forCurrentProcess(),
+            ).also(TrayController::install)
+        }
+        DisposableEffect(Unit) { onDispose(tray::remove) }
+        LaunchedEffect(state.updateProgress != null, state.totalCount.unread) {
+            tray.update(
+                state = trayStateOf(state),
+                updating = state.updateProgress != null,
+                tooltip = "$APP_NAME  未読 ${state.totalCount.unread} 件",
+            )
+        }
 
         // 最小化はタスクトレイへしまう操作として扱う。
         LaunchedEffect(windowState.isMinimized) {
@@ -280,12 +286,15 @@ private suspend fun removeOldDownloads(installer: UpdateInstaller) {
     }
 }
 
-/** アプリの更新の状況を、ツールバーに出す通知にする。新しい版が無ければ何も出さない。 */
+/** アプリの更新の状況を、ツールバーに出す通知にする。出す通知が無ければ null を返す。 */
 private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): ToolbarNotice? = when (state) {
     UpdateState.Idle -> null
     is UpdateState.Available -> ToolbarNotice("新しい版 ${state.release.version} に更新して再起動", onInstall)
     is UpdateState.Installing -> ToolbarNotice("新しい版 ${state.release.version} を取得中…", onClick = null)
     is UpdateState.Failed -> ToolbarNotice("更新できませんでした。もう一度試す", onInstall)
+    UpdateState.Checking -> ToolbarNotice("アプリの更新を確認中…", onClick = null)
+    UpdateState.UpToDate -> ToolbarNotice("最新の版です", onClick = null)
+    UpdateState.CheckFailed -> ToolbarNotice("アプリの更新を確認できませんでした", onClick = null)
 }
 
 private fun trayStateOf(state: MainUiState): TrayState =

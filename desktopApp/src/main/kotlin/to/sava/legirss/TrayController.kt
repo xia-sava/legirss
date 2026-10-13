@@ -94,12 +94,16 @@ enum class TrayState(val color: Color) {
  *
  * 左クリックでウィンドウの表示と非表示を切り替え、右クリックでメニューを出す。
  * アイコンの色は未読の有無を表す。更新している間は、絵の点と弧が内側から順に明るくなる動きを繰り返す。
+ *
+ * @param canCheckAppUpdate アプリの更新を確かめられる動かし方をしているか。できなければ、その項目を選べない表示にする。
  */
 class TrayController(
     private val onToggleWindow: () -> Unit,
     private val onShowWindow: () -> Unit,
     private val onUpdate: () -> Unit,
     private val onOpenSettings: () -> Unit,
+    private val onCheckAppUpdate: () -> Unit,
+    private val canCheckAppUpdate: Boolean,
     private val onExit: () -> Unit,
     private val startup: StartupRegistration,
 ) {
@@ -200,6 +204,7 @@ class TrayController(
         addSeparator()
         add(menuItem(JMenuItem(SETTINGS_LABEL)) { onOpenSettings() })
         add(createStartupItem())
+        add(menuItem(JMenuItem(CHECK_APP_UPDATE_LABEL)) { onCheckAppUpdate() }.apply { isEnabled = canCheckAppUpdate })
         addSeparator()
         add(menuItem(JMenuItem(EXIT_LABEL)) { onExit() })
     }
@@ -232,6 +237,7 @@ class TrayController(
         private const val UPDATE_LABEL = "更新"
         private const val SETTINGS_LABEL = "設定…"
         private const val STARTUP_LABEL ="Windows の起動時に開始する"
+        private const val CHECK_APP_UPDATE_LABEL = "アプリの更新を確認"
         private const val EXIT_LABEL = "終了"
 
         // メニューの 1 行の高さを、文字の高さの何倍にするか。

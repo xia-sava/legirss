@@ -3,6 +3,8 @@ package to.sava.legirss.update
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import java.nio.file.Path
@@ -62,6 +64,49 @@ class AppUpdaterTest {
 
         updater.check()
 
+        assertIs<UpdateState.Available>(updater.state.value)
+    }
+
+    /** 利用者の求めで確かめて新しい版があれば、その版を入れられる状況になり、時間が経っても変わらない。 */
+    @Test
+    fun becomesAvailableWhenCheckedOnRequest() = runTest(UnconfinedTestDispatcher()) {
+        val updater = updater()
+
+        updater.checkNow()
+        advanceTimeBy(AppUpdater.RESULT_NOTICE_MILLIS)
+        runCurrent()
+
+        assertEquals("0.2.0", assertIs<UpdateState.Available>(updater.state.value).release.version.toString())
+    }
+
+    /** 利用者の求めで確かめて新しい版が無ければ、そのことを決まった時間だけ示してから、元の状況に戻る。 */
+    @Test
+    fun showsUpToDateForLimitedTime() = runTest(UnconfinedTestDispatcher()) {
+        val updater = updater()
+        publishedVersion = "0.1.0"
+
+        updater.checkNow()
+        val afterCheck = updater.state.value
+        advanceTimeBy(AppUpdater.RESULT_NOTICE_MILLIS)
+        runCurrent()
+
+        assertEquals(UpdateState.UpToDate, afterCheck)
+        assertEquals(UpdateState.Idle, updater.state.value)
+    }
+
+    /** 利用者の求めで確かめられなかったときは、そのことを決まった時間だけ示してから、分かっていた新しい版の状況に戻る。 */
+    @Test
+    fun showsCheckFailureThenRestoresKnownVersion() = runTest(UnconfinedTestDispatcher()) {
+        val updater = updater()
+        updater.check()
+        publishedVersion = null
+
+        updater.checkNow()
+        val afterCheck = updater.state.value
+        advanceTimeBy(AppUpdater.RESULT_NOTICE_MILLIS)
+        runCurrent()
+
+        assertEquals(UpdateState.CheckFailed, afterCheck)
         assertIs<UpdateState.Available>(updater.state.value)
     }
 
