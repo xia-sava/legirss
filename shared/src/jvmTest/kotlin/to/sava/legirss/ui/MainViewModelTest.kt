@@ -18,6 +18,7 @@ import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NewArticle
 import to.sava.legirss.model.NewChannel
+import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.update.FeedUpdater
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -385,6 +386,20 @@ class MainViewModelTest {
         assertEquals(listOf("全ての記事"), viewModel.treeLabels)
         assertEquals(NodeSelection.All, viewModel.state.value.selectedNode)
         assertEquals(emptyList(), viewModel.titles)
+    }
+
+    /** ノードをグループの行の中へ移すと、そのグループが開いて、中に移したノードが並ぶ。 */
+    @Test
+    fun movesNodeIntoGroup() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val channel = NodeSelection.Node(store.loadTree().single().id)
+        val group = NodeSelection.Node(store.addGroup(parentId = null, name = "News"))
+        viewModel.reloadList()
+
+        viewModel.moveNode(channel, group, TreeDropPlace.INTO)
+
+        assertEquals(listOf("全ての記事 (2/3)", "News (2/3)", "Example (2/3)"), viewModel.treeLabels)
+        assertEquals(listOf(0, 1, 2), viewModel.state.value.treeRows.map { it.depth })
     }
 
     /** フィードの URL を変えると、次の更新は新しい URL から取得する。 */

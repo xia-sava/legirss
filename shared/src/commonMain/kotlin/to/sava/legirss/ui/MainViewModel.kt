@@ -23,6 +23,7 @@ import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
+import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.update.FeedUpdater
 import to.sava.legirss.update.UpdateProgress
 
@@ -303,6 +304,17 @@ class MainViewModel(
         }
         scope.launch {
             store.sortChildrenByName(parentId)
+            reloadTree()
+        }
+    }
+
+    /** [source] のノードを、[target] の行の [place] へ移す。移せない組み合わせなら何もしない。 */
+    override fun moveNode(source: NodeSelection, target: NodeSelection, place: TreeDropPlace) {
+        val nodeId = (source as? NodeSelection.Node)?.id ?: return
+        val destination = tree.moveDestination(source, target, place) ?: return
+        scope.launch {
+            store.moveNode(nodeId, destination.parentId, destination.index)
+            expanded = expanded + listOfNotNull(destination.parentId?.let(NodeSelection::Node))
             reloadTree()
         }
     }

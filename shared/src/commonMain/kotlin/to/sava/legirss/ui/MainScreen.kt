@@ -152,6 +152,7 @@ private fun TreePane(state: MainUiState, actions: MainActions) {
                 actions.selectNode(key)
                 menu = key to position
             },
+            onMove = actions::moveNode,
             modifier = Modifier.fillMaxSize(),
         )
         menu?.let { (key, position) ->

@@ -6,6 +6,7 @@ import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.ChannelInfo
 import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
+import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.ui.component.TreeIcon
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,6 +50,36 @@ class MainStateTest {
         ),
         channelCounts = mapOf(2L to ArticleCount(total = 2, unread = 1), 4L to ArticleCount(total = 1, unread = 0)),
     )
+
+    private fun destination(sourceId: Long, target: NodeSelection, place: TreeDropPlace) =
+        tree.moveDestination(NodeSelection.Node(sourceId), target, place)
+
+    /** 行の前後へ落とすとその行の兄弟になり、グループの中へ落とすとその末尾に入る。位置は移すノードを除いて数える。 */
+    @Test
+    fun computesDestinationOfMove() {
+        assertEquals(MoveDestination(parentId = 1, index = 0), destination(5, NodeSelection.Node(2), TreeDropPlace.BEFORE))
+        assertEquals(MoveDestination(parentId = 1, index = 1), destination(5, NodeSelection.Node(2), TreeDropPlace.AFTER))
+        assertEquals(MoveDestination(parentId = 3, index = 1), destination(5, NodeSelection.Node(3), TreeDropPlace.INTO))
+        assertEquals(MoveDestination(parentId = 1, index = 1), destination(2, NodeSelection.Node(3), TreeDropPlace.AFTER))
+        assertEquals(MoveDestination(parentId = null, index = 1), destination(1, NodeSelection.Node(5), TreeDropPlace.AFTER))
+    }
+
+    /** 「全ての記事」へ落とすと最上位の末尾に、チャンネルの中へ落とすとそのチャンネルの直後に置く。 */
+    @Test
+    fun adjustsDestinationForRowsThatCannotContainNodes() {
+        assertEquals(MoveDestination(parentId = null, index = 2), destination(4, NodeSelection.All, TreeDropPlace.INTO))
+        assertEquals(MoveDestination(parentId = null, index = 1), destination(5, NodeSelection.All, TreeDropPlace.BEFORE))
+        assertEquals(MoveDestination(parentId = 1, index = 1), destination(5, NodeSelection.Node(2), TreeDropPlace.INTO))
+    }
+
+    /** 自分自身へ、また自分の配下へは移せない。「全ての記事」は移せない。 */
+    @Test
+    fun rejectsMoveIntoItself() {
+        assertNull(destination(1, NodeSelection.Node(1), TreeDropPlace.INTO))
+        assertNull(destination(1, NodeSelection.Node(3), TreeDropPlace.INTO))
+        assertNull(destination(1, NodeSelection.Node(4), TreeDropPlace.BEFORE))
+        assertNull(tree.moveDestination(NodeSelection.All, NodeSelection.Node(1), TreeDropPlace.INTO))
+    }
 
     /** グループの記事数は配下のチャンネルの合計になり、「全ての記事」は全体の合計になる。 */
     @Test

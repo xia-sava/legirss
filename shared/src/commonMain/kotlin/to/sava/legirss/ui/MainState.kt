@@ -7,6 +7,7 @@ import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
+import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.ui.component.TreeIcon
 import to.sava.legirss.ui.component.TreeRow
 import to.sava.legirss.update.UpdateProgress
@@ -144,6 +145,13 @@ fun StateFilter.next(): StateFilter = StateFilter.entries[(ordinal + 1) % StateF
 
 const val ALL_ARTICLES_LABEL = "全ての記事"
 
+/** ノードの移動先。[index] は、移すノードを除いた兄弟の並びでの位置。 */
+data class MoveDestination(
+    /** 移動先の親。最上位なら null。 */
+    val parentId: Long?,
+    val index: Int,
+)
+
 /** ツリーの構造から、表示用の行と記事数を求める。 */
 class TreeModel(
     nodes: List<TreeNode>,
@@ -176,6 +184,32 @@ class TreeModel(
      */
     fun parentForNewNode(selection: NodeSelection): Long? =
         nodeOf(selection)?.let { node -> if (node.kind == NodeKind.GROUP) node.id else node.parentId }
+
+    /**
+     * [source] のノードを [target] の行の [place] へ落としたときの移動先。移せない組み合わせなら null。
+     *
+     * 「全ての記事」へ落としたら最上位の末尾に、チャンネルの中へ落としたらそのチャンネルの直後に置く。
+     * 自分自身と、自分の配下へは移せない。
+     */
+    fun moveDestination(source: NodeSelection, target: NodeSelection, place: TreeDropPlace): MoveDestination? {
+        val moving = nodeOf(source) ?: return null
+        val targetNode = nodeOf(target) ?: return MoveDestination(parentId = null, index = (topLevel() - moving).size)
+        if (targetNode.id == moving.id) return null
+        val intoGroup = place == TreeDropPlace.INTO && targetNode.kind == NodeKind.GROUP
+        val parentId = if (intoGroup) targetNode.id else targetNode.parentId
+        if (isSelfOrDescendant(parentId, ancestorId = moving.id)) return null
+        val siblings = childrenByParent[parentId].orEmpty() - moving
+        val index = when {
+            intoGroup -> siblings.size
+            place == TreeDropPlace.BEFORE -> siblings.indexOf(targetNode)
+            else -> siblings.indexOf(targetNode) + 1
+        }
+        return MoveDestination(parentId, index)
+    }
+
+    /** [nodeId] が [ancestorId] 自身か、その配下にあるか。 */
+    private fun isSelfOrDescendant(nodeId: Long?, ancestorId: Long): Boolean =
+        generateSequence(nodeId) { byId[it]?.parentId }.any { it == ancestorId }
 
     /** [feedUrl] のフィードを購読するチャンネルが登録されているか。 */
     fun hasFeed(feedUrl: String): Boolean = byId.values.any { it.channel?.feedUrl == feedUrl }
