@@ -117,6 +117,84 @@ class FeedUpdaterTest {
         assertEquals(listOf("Second"), articles().map { it.title })
     }
 
+    private suspend fun setStates(vararg states: Pair<String, ArticleState>) {
+        val ids = articles().associate { it.title to it.id }
+        states.forEach { (title, state) -> store.setArticleState(ids.getValue(title), state) }
+    }
+
+    /** 既読の記事は新しい方から保存数だけ残す。未読と保護の記事は数に入れずに残す。消した記事は登録し直さない。 */
+    @Test
+    fun removesReadArticlesBeyondKeepCount() = runTest {
+        registerChannel()
+        store.saveSetting("keep_count", "2")
+        val feed = rss("a" to "A", "b" to "B", "c" to "C", "d" to "D", "e" to "E", "f" to "F")
+        updater { respond(feed) }.update(channelIds = null)
+        setStates(
+            "A" to ArticleState.READ,
+            "B" to ArticleState.PROTECTED,
+            "C" to ArticleState.READ,
+            "D" to ArticleState.READ,
+            "F" to ArticleState.READ,
+        )
+
+        val afterRemoval = updater { respond(feed) }.update(channelIds = null)
+        val remaining = articles().map { it.title }
+        val afterAnotherUpdate = updater { respond(feed) }.update(channelIds = null)
+
+        assertEquals(listOf("A", "B", "C", "E"), remaining)
+        assertEquals(0, afterRemoval.newArticles)
+        assertEquals(0, afterAnotherUpdate.newArticles)
+        assertEquals(remaining, articles().map { it.title })
+    }
+
+    /** 保存日数より古い既読の記事を消す。フィードに変更が無かった更新でも消す。未読と保護の記事は残す。 */
+    @Test
+    fun removesReadArticlesOlderThanKeepDays() = runTest {
+        registerChannel()
+        store.saveSetting("keep_days", "10")
+        updater { respond(rss("a" to "A", "b" to "B", "c" to "C")) }.update(channelIds = null)
+        setStates("A" to ArticleState.READ, "B" to ArticleState.PROTECTED)
+
+        clock += 9 * GonePolicy.COUNT_INTERVAL_MILLIS
+        updater { respond("", HttpStatusCode.NotModified) }.update(channelIds = null)
+        val withinKeepDays = articles().map { it.title }
+        clock += 2 * GonePolicy.COUNT_INTERVAL_MILLIS
+        updater { respond("", HttpStatusCode.NotModified) }.update(channelIds = null)
+
+        assertEquals(listOf("A", "B", "C"), withinKeepDays)
+        assertEquals(listOf("B", "C"), articles().map { it.title })
+    }
+
+    /** 削除した記事は、フィードに載り続けている限り、長い時間が経っても登録し直さない。 */
+    @Test
+    fun keepsDeletedArticlesForgottenWhileTheyStayInFeed() = runTest {
+        registerChannel()
+        updater { respond(rss("a" to "A", "b" to "B")) }.update(channelIds = null)
+        store.deleteArticle(articles().first().id, now = clock)
+
+        repeat(3) {
+            clock += 20 * GonePolicy.COUNT_INTERVAL_MILLIS
+            updater { respond(rss("a" to "A", "b" to "B")) }.update(channelIds = null)
+        }
+
+        assertEquals(listOf("B"), articles().map { it.title })
+    }
+
+    /** 削除した記事の控えは、フィードで 30 日見かけなくなったら捨てる。そのあとに再び載った記事は新着として登録する。 */
+    @Test
+    fun forgetsDeletedArticlesLongAfterTheyLeaveFeed() = runTest {
+        registerChannel()
+        updater { respond(rss("a" to "A", "b" to "B")) }.update(channelIds = null)
+        store.deleteArticle(articles().first().id, now = clock)
+
+        clock += 31 * GonePolicy.COUNT_INTERVAL_MILLIS
+        updater { respond(rss("b" to "B")) }.update(channelIds = null)
+        val progress = updater { respond(rss("a" to "A", "b" to "B")) }.update(channelIds = null)
+
+        assertEquals(1, progress.newArticles)
+        assertEquals(listOf("B", "A"), articles().map { it.title })
+    }
+
     /** 「最初の取得は既読」の指定があるチャンネルは、最初の取得分を既読で登録し、新着に数えない。次の取得からは未読になる。 */
     @Test
     fun registersFirstFetchAsReadWhenRequested() = runTest {

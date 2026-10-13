@@ -19,6 +19,7 @@ import to.sava.legirss.feed.FetchFailure
 import to.sava.legirss.feed.FetchRequest
 import to.sava.legirss.feed.FetchResult
 import to.sava.legirss.model.ChannelError
+import to.sava.legirss.model.Retention
 import to.sava.legirss.model.UpdateTarget
 
 /** 実行中の更新の進み具合。 */
@@ -51,13 +52,14 @@ class FeedUpdater(
      */
     suspend fun update(channelIds: Collection<Long>?): UpdateProgress {
         val targets = store.loadUpdateTargets(channelIds)
+        val retention = store.loadRetention()
         mutableProgress.value = UpdateProgress(total = targets.size)
         try {
             val permits = Semaphore(parallelism)
             coroutineScope {
                 targets.map { target ->
                     async {
-                        val outcome = permits.withPermit { updateChannel(target) }
+                        val outcome = permits.withPermit { updateChannel(target, retention) }
                         mutableProgress.update { it?.plus(outcome) }
                     }
                 }.awaitAll()
@@ -68,15 +70,15 @@ class FeedUpdater(
         }
     }
 
-    private suspend fun updateChannel(target: UpdateTarget): Outcome {
+    private suspend fun updateChannel(target: UpdateTarget, retention: Retention): Outcome {
         val request = FetchRequest(target.feedUrl, target.etag, target.lastModified)
         return when (val result = fetcher.fetch(request)) {
             is FetchResult.NotModified -> {
-                store.recordNotModified(target, result.permanentUrl ?: target.feedUrl, now())
+                store.recordNotModified(target, result.permanentUrl ?: target.feedUrl, retention, now())
                 Outcome.Succeeded(newArticles = 0)
             }
 
-            is FetchResult.Fetched -> applyFetched(target, result)
+            is FetchResult.Fetched -> applyFetched(target, result, retention)
 
             is FetchResult.Failed -> {
                 val error = when (result.kind) {
@@ -88,11 +90,12 @@ class FeedUpdater(
         }
     }
 
-    private suspend fun applyFetched(target: UpdateTarget, result: FetchResult.Fetched): Outcome {
+    private suspend fun applyFetched(target: UpdateTarget, result: FetchResult.Fetched, retention: Retention): Outcome {
         val feedUrl = result.permanentUrl ?: target.feedUrl
         val feed = withContext(parseDispatcher) { FeedParser.parse(FeedText.decode(result.body, result.charset), feedUrl) }
             ?: return recordFailure(target, ChannelError.NOT_A_FEED, detail = "フィードとして読めません", gone = false)
-        return Outcome.Succeeded(store.applyFetchedFeed(target, feedUrl, feed, result.etag, result.lastModified, now()))
+        val added = store.applyFetchedFeed(target, feedUrl, feed, result.etag, result.lastModified, retention, now())
+        return Outcome.Succeeded(added)
     }
 
     private suspend fun recordFailure(target: UpdateTarget, error: ChannelError, detail: String, gone: Boolean): Outcome {

@@ -171,3 +171,18 @@ SELECT channel_id, identity, ? FROM article WHERE id = ?;
 
 deleteArticle:
 DELETE FROM article WHERE id = ?;
+
+-- 既読の記事のうち、指定の時刻より古いものと、新しい方から数えて保存数を超えたもの。
+selectExpiredArticleIds:
+SELECT id FROM article
+WHERE channel_id = :channelId AND state = 1
+  AND (sort_at < :oldestSortAt
+       OR id NOT IN (
+           SELECT id FROM article
+           WHERE channel_id = :channelId AND state = 1
+           ORDER BY sort_at DESC, id DESC
+           LIMIT :keepCount
+       ));
+
+deleteStaleSeen:
+DELETE FROM seen WHERE channel_id = ? AND seen_at < ?;

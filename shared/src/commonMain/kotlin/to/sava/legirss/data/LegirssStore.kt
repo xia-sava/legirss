@@ -16,6 +16,7 @@ import to.sava.legirss.model.NewChannel
 import to.sava.legirss.model.NewGroup
 import to.sava.legirss.model.NewNode
 import to.sava.legirss.model.NodeKind
+import to.sava.legirss.model.Retention
 import to.sava.legirss.model.TreeNode
 import to.sava.legirss.model.UpdateTarget
 
@@ -103,6 +104,7 @@ class LegirssStore(
      * 取得したフィードをチャンネルに取り込む。
      *
      * 登録済みの記事は内容だけを更新し、閲覧状況は変えない。整理・削除した記事は登録し直さない。
+     * 取り込んだあと、[retention] に従って古い記事を整理する。
      *
      * @param feedUrl 取得に使った URL。恒久的に移転していれば移転先。
      * @return 未読として新しく登録した記事の数。
@@ -113,6 +115,7 @@ class LegirssStore(
         feed: ParsedFeed,
         etag: String?,
         lastModified: String?,
+        retention: Retention,
         now: Long,
     ): Int = access {
         database.transactionWithResult {
@@ -152,14 +155,40 @@ class LegirssStore(
                 item.identity !in removed && item.identity !in registered
             }
             queries.recordFetchSuccess(feedUrl, feed.siteUrl, feed.title, etag, lastModified, now, channelId)
+            removeExpiredArticles(channelId, retention, now)
+            // フィードに載っている識別子は、上で見かけた時刻を新しくしてある。
+            queries.deleteStaleSeen(channelId, now - SEEN_KEEP_MILLIS)
             if (target.firstFetchAsRead) 0 else added
         }
     }
 
-    /** フィードに変更が無かったことを記録する。 */
-    suspend fun recordNotModified(target: UpdateTarget, feedUrl: String, now: Long) = access {
-        queries.recordNotModified(feedUrl, now, target.channelId)
+    /** フィードに変更が無かったことを記録し、[retention] に従って古い記事を整理する。 */
+    suspend fun recordNotModified(target: UpdateTarget, feedUrl: String, retention: Retention, now: Long) = access {
+        database.transaction {
+            queries.recordNotModified(feedUrl, now, target.channelId)
+            removeExpiredArticles(target.channelId, retention, now)
+        }
     }
+
+    /** 残す範囲から外れた既読の記事を消す。フィードに残っていても登録し直されないよう、識別子を控えておく。 */
+    private fun removeExpiredArticles(channelId: Long, retention: Retention, now: Long) {
+        queries.selectExpiredArticleIds(channelId, now - retention.keepDays * MILLIS_PER_DAY, retention.keepCount.toLong())
+            .executeAsList()
+            .forEach { articleId ->
+                queries.rememberDeletedArticle(now, articleId)
+                queries.deleteArticle(articleId)
+            }
+    }
+
+    /** 既読の記事を残す範囲の設定。保存されていない項目は既定値になる。 */
+    suspend fun loadRetention(): Retention = access {
+        Retention(
+            keepCount = settingAsInt(KEEP_COUNT_KEY) ?: Retention.DEFAULT.keepCount,
+            keepDays = settingAsInt(KEEP_DAYS_KEY) ?: Retention.DEFAULT.keepDays,
+        )
+    }
+
+    private fun settingAsInt(key: String): Int? = queries.selectSetting(key).executeAsOneOrNull()?.toIntOrNull()
 
     /** 更新の失敗を記録する。[paused] が true なら購読中止にする。 */
     suspend fun recordFetchFailure(
@@ -244,4 +273,14 @@ class LegirssStore(
         sortAt: Long,
         state: Long,
     ): ArticleRow = ArticleRow(id, channelId, title, link, author, category, publishedAt, sortAt, ArticleState.fromCode(state))
+
+    private companion object {
+        const val KEEP_COUNT_KEY = "keep_count"
+        const val KEEP_DAYS_KEY = "keep_days"
+
+        const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
+
+        /** 整理・削除した記事の識別子を、フィードで見かけなくなってから控えておく期間。 */
+        const val SEEN_KEEP_MILLIS = 30 * MILLIS_PER_DAY
+    }
 }

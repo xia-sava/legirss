@@ -14,6 +14,18 @@ enum class ChannelError(val code: Long) {
     NOT_A_FEED(3),
 }
 
+/** 既読の記事をチャンネルごとにどこまで残すか。未読の記事と保護された記事は、これに関わらず残す。 */
+data class Retention(
+    /** 新しい方から数えて残す数。 */
+    val keepCount: Int,
+    /** 残す日数。記事の日時がこれより古いものは残さない。 */
+    val keepDays: Int,
+) {
+    companion object {
+        val DEFAULT = Retention(keepCount = 100, keepDays = 60)
+    }
+}
+
 /** 更新の対象になるチャンネルと、取得に使う前回の情報。 */
 data class UpdateTarget(
     val channelId: Long,
