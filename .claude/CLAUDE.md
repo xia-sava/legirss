@@ -91,6 +91,8 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 - **`BoxWithConstraints` の外から、中の部品の `FocusRequester` を呼ばない。** 中身は配置の段階で
   組み込まれるので、外側の `LaunchedEffect` から `requestFocus()` を呼ぶと、まだ結び付いておらず失敗する。
   フォーカスを移す処理は、対象の部品と同じ composable の中に置く
+- **配置される前の一覧をスクロールしない。** 最初の合成で動く `LaunchedEffect` から `scrollToItem` を呼ぶと、
+  配置の最中に配置をやり直すことになって例外が出る。`layoutInfo.visibleItemsInfo` が空の間は呼ばない
 - **`clickable` は、クリックされるとフォーカスを取る。** 押したあとも別の部品にフォーカスを残したい
   ときは、クリックの処理の中で明示的に戻す（ツリーをクリックしたあと、一覧へ戻しているのがこれ）
 - **文字の入力欄は、Space などの KeyDown を消費しない。** 入力欄で打ったキーがウィンドウ全体のキー
