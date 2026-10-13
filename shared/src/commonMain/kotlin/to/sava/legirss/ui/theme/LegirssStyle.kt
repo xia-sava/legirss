@@ -29,7 +29,6 @@ data class LegirssColors(
     val iconError: Color = Color(0xFFD13438),
     val iconUpdating: Color = Color(0xFF2B7CD3),
     val iconUnread: Color = Color(0xFF2B7CD3),
-    val iconProtected: Color = Color(0xFFD9A400),
 )
 
 /**

@@ -200,22 +200,21 @@ class MainViewModelTest {
         assertEquals(0, viewModel.state.value.selectedArticleIndex)
     }
 
-    /** 選んでいる記事の閲覧状況を、既読 → 保護 → 未読 の順と、その逆順に切り替えられる。 */
+    /** 選んでいる記事の未読と既読を切り替えられる。切り替えた結果は保存される。 */
     @Test
-    fun cyclesStateOfSelectedArticle() = runTest(UnconfinedTestDispatcher()) {
+    fun togglesStateOfSelectedArticle() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
         viewModel.selectArticle(2)
 
-        viewModel.cycleSelectedState(forward = true)
-        val afterForward = viewModel.states[2]
-        viewModel.cycleSelectedState(forward = true)
-        val afterSecondForward = viewModel.states[2]
-        viewModel.cycleSelectedState(forward = false)
+        viewModel.toggleSelectedState()
+        val afterFirstToggle = viewModel.states[2]
+        val storedAfterFirstToggle = storedStates()["read"]
+        viewModel.toggleSelectedState()
 
-        assertEquals(ArticleState.PROTECTED, afterForward)
-        assertEquals(ArticleState.UNREAD, afterSecondForward)
-        assertEquals(ArticleState.PROTECTED, viewModel.states[2])
-        assertEquals(ArticleState.PROTECTED, storedStates()["read"])
+        assertEquals(ArticleState.UNREAD, afterFirstToggle)
+        assertEquals(ArticleState.UNREAD, storedAfterFirstToggle)
+        assertEquals(ArticleState.READ, viewModel.states[2])
+        assertEquals(ArticleState.READ, storedStates()["read"])
     }
 
     /** 選んでいる記事を削除すると一覧と保存先から消え、選択は同じ位置に残る。 */
@@ -294,13 +293,13 @@ class MainViewModelTest {
         viewModel.selectArticle(2)
         viewModel.toggleArticleMark(1)
 
-        viewModel.setSelectedState(ArticleState.PROTECTED)
+        viewModel.setSelectedState(ArticleState.READ)
         val statesAfterChange = storedStates()
         viewModel.copySelected(CopyContent.TITLE_AND_URL)
         viewModel.deleteSelectedArticles()
 
-        assertEquals(ArticleState.PROTECTED, statesAfterChange["older"])
-        assertEquals(ArticleState.PROTECTED, statesAfterChange["read"])
+        assertEquals(ArticleState.READ, statesAfterChange["older"])
+        assertEquals(ArticleState.READ, statesAfterChange["read"])
         assertEquals(ArticleState.UNREAD, statesAfterChange["newer"])
         assertEquals(listOf("older https://example.com/older\nread https://example.com/read"), copiedTexts)
         assertEquals(listOf("newer"), viewModel.titles)

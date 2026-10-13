@@ -14,7 +14,7 @@ enum class ChannelError(val code: Long) {
     NOT_A_FEED(3),
 }
 
-/** 既読の記事をチャンネルごとにどこまで残すか。未読の記事と保護された記事は、これに関わらず残す。 */
+/** 既読の記事をチャンネルごとにどこまで残すか。未読の記事は、これに関わらず残す。 */
 data class Retention(
     /** 新しい方から数えて残す数。 */
     val keepCount: Int,

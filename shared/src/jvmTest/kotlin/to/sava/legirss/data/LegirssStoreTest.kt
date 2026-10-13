@@ -59,7 +59,7 @@ class LegirssStoreTest {
             title = null,
             paused = true,
             firstFetchAsRead = false,
-            articles = listOf(article("b1", ArticleState.PROTECTED, 30)),
+            articles = listOf(article("b1", ArticleState.READ, 30)),
         ),
     )
 
@@ -87,7 +87,7 @@ class LegirssStoreTest {
         assertTrue(beta.channel!!.paused)
     }
 
-    /** チャンネルごとの総数と未読数を数える。保護された記事は未読に数えない。 */
+    /** チャンネルごとの総数と未読数を数える。既読の記事は未読に数えない。 */
     @Test
     fun countsArticlesPerChannel() = runTest {
         val store = newStore().apply { importNodes(nodes) }

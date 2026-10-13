@@ -10,7 +10,7 @@ import argparse
 import sqlite3
 from pathlib import Path
 
-ARTICLE_STATE_NAMES = {0: "未読", 1: "既読", 2: "保護"}
+ARTICLE_STATE_NAMES = {0: "未読", 1: "既読"}
 ERROR_KIND_NAMES = {1: "応答なし", 2: "HTTP エラー", 3: "フィードとして読めない"}
 
 

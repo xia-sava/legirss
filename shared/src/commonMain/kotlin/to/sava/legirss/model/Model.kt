@@ -13,7 +13,6 @@ enum class NodeKind(val code: Long) {
 enum class ArticleState(val code: Long) {
     UNREAD(0),
     READ(1),
-    PROTECTED(2),
     ;
 
     companion object {

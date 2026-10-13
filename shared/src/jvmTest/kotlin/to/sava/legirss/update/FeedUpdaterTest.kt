@@ -96,13 +96,13 @@ class FeedUpdaterTest {
     fun updatesContentOfKnownArticlesWithoutChangingState() = runTest {
         registerChannel()
         updater { respond(rss("a" to "First")) }.update(channelIds = null)
-        store.setArticleState(articles().single().id, ArticleState.PROTECTED)
+        store.setArticleState(articles().single().id, ArticleState.READ)
 
         val progress = updater { respond(rss("a" to "First, revised", "b" to "Second")) }.update(channelIds = null)
 
         assertEquals(1, progress.newArticles)
         assertEquals(listOf("First, revised", "Second"), articles().map { it.title })
-        assertEquals(listOf(ArticleState.PROTECTED, ArticleState.UNREAD), articles().map { it.state })
+        assertEquals(listOf(ArticleState.READ, ArticleState.UNREAD), articles().map { it.state })
     }
 
     /** 削除した記事は、フィードに残っていても登録し直さない。 */
@@ -123,7 +123,7 @@ class FeedUpdaterTest {
         states.forEach { (title, state) -> store.setArticleState(ids.getValue(title), state) }
     }
 
-    /** 既読の記事は新しい方から保存数だけ残す。未読と保護の記事は数に入れずに残す。消した記事は登録し直さない。 */
+    /** 既読の記事は新しい方から保存数だけ残す。未読の記事は数に入れずに残す。消した記事は登録し直さない。 */
     @Test
     fun removesReadArticlesBeyondKeepCount() = runTest {
         registerChannel()
@@ -132,7 +132,6 @@ class FeedUpdaterTest {
         updater { respond(feed) }.update(channelIds = null)
         setStates(
             "A" to ArticleState.READ,
-            "B" to ArticleState.PROTECTED,
             "C" to ArticleState.READ,
             "D" to ArticleState.READ,
             "F" to ArticleState.READ,
@@ -148,13 +147,13 @@ class FeedUpdaterTest {
         assertEquals(remaining, articles().map { it.title })
     }
 
-    /** 保存日数より古い既読の記事を消す。フィードに変更が無かった更新でも消す。未読と保護の記事は残す。 */
+    /** 保存日数より古い既読の記事を消す。フィードに変更が無かった更新でも消す。未読の記事は残す。 */
     @Test
     fun removesReadArticlesOlderThanKeepDays() = runTest {
         registerChannel()
         store.saveSetting("keep_days", "10")
         updater { respond(rss("a" to "A", "b" to "B", "c" to "C")) }.update(channelIds = null)
-        setStates("A" to ArticleState.READ, "B" to ArticleState.PROTECTED)
+        setStates("A" to ArticleState.READ)
 
         clock += 9 * GonePolicy.COUNT_INTERVAL_MILLIS
         updater { respond("", HttpStatusCode.NotModified) }.update(channelIds = null)

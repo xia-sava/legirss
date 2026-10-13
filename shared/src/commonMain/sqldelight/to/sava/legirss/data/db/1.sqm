@@ -1,0 +1,2 @@
+-- 記事の state から 2 の値を無くす。2 だった記事は既読にする。
+UPDATE article SET state = 1 WHERE state = 2;

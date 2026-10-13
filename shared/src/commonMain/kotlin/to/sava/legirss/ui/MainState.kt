@@ -25,14 +25,12 @@ enum class StateFilter(val label: String) {
     ALL("全て"),
     UNREAD("未読"),
     READ("既読"),
-    PROTECTED("保護"),
     ;
 
     fun accepts(state: ArticleState): Boolean = when (this) {
         ALL -> true
         UNREAD -> state == ArticleState.UNREAD
         READ -> state == ArticleState.READ
-        PROTECTED -> state == ArticleState.PROTECTED
     }
 }
 
@@ -154,14 +152,13 @@ data class MainUiState(
         get() = articles.indexOfLast { it.state == ArticleState.UNREAD }.takeIf { it >= 0 }
 }
 
-/** ←→ のキーで閲覧状況を切り替える順番。 */
-private val stateCycle = listOf(ArticleState.UNREAD, ArticleState.READ, ArticleState.PROTECTED)
+/** 未読なら既読、既読なら未読。 */
+fun ArticleState.toggled(): ArticleState = when (this) {
+    ArticleState.UNREAD -> ArticleState.READ
+    ArticleState.READ -> ArticleState.UNREAD
+}
 
-/** 閲覧状況を 未読 → 既読 → 保護 → 未読 の順（[forward] が false なら逆順）で 1 つ進めた値。 */
-fun ArticleState.cycled(forward: Boolean): ArticleState =
-    stateCycle[(stateCycle.indexOf(this) + (if (forward) 1 else -1)).mod(stateCycle.size)]
-
-/** 購読状況の絞り込みを 全て → 未読 → 既読 → 保護 → 全て の順で 1 つ進めた値。 */
+/** 購読状況の絞り込みを 全て → 未読 → 既読 → 全て の順で 1 つ進めた値。 */
 fun StateFilter.next(): StateFilter = StateFilter.entries[(ordinal + 1) % StateFilter.entries.size]
 
 const val ALL_ARTICLES_LABEL = "全ての記事"

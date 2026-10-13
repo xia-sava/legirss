@@ -27,7 +27,7 @@ CREATE TABLE channel (
     gone_at INTEGER
 );
 
--- 記事。state は 0=未読 1=既読 2=保護。時刻は UTC のエポックミリ秒。
+-- 記事。state は 0=未読 1=既読。時刻は UTC のエポックミリ秒。
 CREATE TABLE article (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_id INTEGER NOT NULL REFERENCES channel(node_id) ON DELETE CASCADE,

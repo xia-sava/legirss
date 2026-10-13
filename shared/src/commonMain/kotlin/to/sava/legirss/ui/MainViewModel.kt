@@ -209,15 +209,15 @@ class MainViewModel(
     }
 
     /**
-     * 操作の対象の記事の閲覧状況を 未読 → 既読 → 保護 の順（[forward] が false なら逆順）で切り替える。
+     * 操作の対象の記事の未読と既読を切り替える。
      *
-     * 対象が複数あるときは、表示している記事（対象に入っていなければ先頭の対象）の次の状況に、全てをそろえる。
+     * 対象が複数あるときは、表示している記事（対象に入っていなければ先頭の対象）を切り替えたあとの状況に、全てをそろえる。
      */
-    override fun cycleSelectedState(forward: Boolean) {
+    override fun toggleSelectedState() {
         val current = mutableState.value
         val targets = current.targetArticles
         val reference = current.selectedArticle?.takeIf { it in targets } ?: targets.firstOrNull() ?: return
-        changeStates(targets, reference.state.cycled(forward))
+        changeStates(targets, reference.state.toggled())
     }
 
     /** 操作の対象の記事の閲覧状況を [state] にする。 */

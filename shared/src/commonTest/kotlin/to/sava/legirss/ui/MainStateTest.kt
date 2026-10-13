@@ -139,7 +139,7 @@ class MainStateTest {
     private val articles = listOf(
         article(1, channelId = 2, state = ArticleState.READ, sortAt = 300, title = "b"),
         article(2, channelId = 2, state = ArticleState.UNREAD, sortAt = 100, title = "c"),
-        article(3, channelId = 4, state = ArticleState.PROTECTED, sortAt = 400, title = "a"),
+        article(3, channelId = 4, state = ArticleState.READ, sortAt = 400, title = "a"),
         article(4, channelId = 4, state = ArticleState.UNREAD, sortAt = 200, title = "d"),
     )
 
@@ -166,10 +166,10 @@ class MainStateTest {
     @Test
     fun filtersByState() {
         val unread = arrangeArticles(articles, StateFilter.UNREAD, ArticleSort(), tree.channelNames)
-        val protected = arrangeArticles(articles, StateFilter.PROTECTED, ArticleSort(), tree.channelNames)
+        val read = arrangeArticles(articles, StateFilter.READ, ArticleSort(), tree.channelNames)
 
         assertEquals(listOf(4L, 2L), unread.map { it.id })
-        assertEquals(listOf(3L), protected.map { it.id })
+        assertEquals(listOf(3L, 1L), read.map { it.id })
     }
 
     /** 読み始める記事は一覧で一番下にある未読とする。日時が同じ未読が並んでいても、下の行を選ぶ。 */

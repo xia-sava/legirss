@@ -66,7 +66,7 @@ private const val ARTICLE_FONT_SIZE_LABEL = "記事の本文の文字の大き�
 private const val UPDATE_INTERVAL_LABEL = "定期更新の間隔（分）"
 private const val KEEP_COUNT_LABEL = "既読の記事を残す数（チャンネルごと）"
 private const val KEEP_DAYS_LABEL = "既読の記事を残す日数"
-private const val RETENTION_NOTE = "未読の記事と保護した記事は、数と日数に関わらず残します。"
+private const val RETENTION_NOTE = "未読の記事は、数と日数に関わらず残します。"
 private const val CENTER_SELECTION_LABEL = "キーで選択を動かしたとき、選択行を一覧の中央へ寄せる"
 
 private const val MAX_NUMBER_DIGITS = 5

@@ -107,7 +107,6 @@ private const val EXPORT_OPML_MENU_LABEL = "OPML の書き出し…"
 private const val OPEN_IN_BROWSER_LABEL = "ブラウザで開く"
 private const val MARK_UNREAD_LABEL = "未読にする"
 private const val MARK_READ_LABEL = "既読にする"
-private const val PROTECT_LABEL = "保護する"
 private const val COPY_URL_LABEL = "URL をコピー"
 private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
@@ -353,7 +352,6 @@ private fun articleMenuEntries(actions: MainActions): List<MenuEntry?> = listOf(
     null,
     MenuEntry(MARK_UNREAD_LABEL) { actions.setSelectedState(ArticleState.UNREAD) },
     MenuEntry(MARK_READ_LABEL) { actions.setSelectedState(ArticleState.READ) },
-    MenuEntry(PROTECT_LABEL) { actions.setSelectedState(ArticleState.PROTECTED) },
     null,
     MenuEntry(COPY_URL_LABEL) { actions.copySelected(CopyContent.URL) },
     MenuEntry(COPY_TITLE_LABEL) { actions.copySelected(CopyContent.TITLE) },
@@ -416,12 +414,11 @@ private fun ArticleDataTable(
     }
 }
 
-/** 未読は塗った丸、既読は輪郭だけの丸、保護は塗った四角で表す。 */
+/** 未読は塗った丸、既読は輪郭だけの丸で表す。 */
 private fun DrawScope.drawStateIcon(state: ArticleState, colors: LegirssColors) {
     when (state) {
         ArticleState.UNREAD -> drawCircle(colors.iconUnread)
         ArticleState.READ -> drawCircle(colors.iconPaused, radius = size.minDimension / 2f - 1f, style = Stroke(1f))
-        ArticleState.PROTECTED -> drawRect(colors.iconProtected)
     }
 }
 

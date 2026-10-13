@@ -37,7 +37,7 @@ interface MainActions {
 
     fun readOn()
 
-    fun cycleSelectedState(forward: Boolean)
+    fun toggleSelectedState()
 
     fun setSelectedState(state: ArticleState)
 
@@ -118,8 +118,7 @@ fun MainActions.handleKey(
         }
         event.key == Key.Spacebar && event.isShiftPressed -> scope.launch { articleScroll.pageUp() }
         event.key == Key.Enter && plain -> openSelectedArticle()
-        event.key == Key.DirectionRight && plain -> cycleSelectedState(forward = true)
-        event.key == Key.DirectionLeft && plain -> cycleSelectedState(forward = false)
+        (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) && plain -> toggleSelectedState()
         event.key == Key.Delete && plain -> deleteSelectedArticles()
         event.key == Key.L && event.isCtrlPressed -> copySelected(CopyContent.URL)
         else -> return false

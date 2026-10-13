@@ -3,6 +3,9 @@ package to.sava.legirss.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import to.sava.legirss.data.db.LegirssDatabase
+import to.sava.legirss.model.ArticleState
+import to.sava.legirss.model.NewArticle
+import to.sava.legirss.model.NewChannel
 import to.sava.legirss.model.NewGroup
 import java.nio.file.Files
 import java.nio.file.Path
@@ -36,6 +39,31 @@ class DatabaseFactoryTest {
 
         assertEquals(LegirssDatabase.Schema.version, storedSchemaVersion())
         assertEquals(listOf("News"), reopened.loadTree().map { it.name })
+    }
+
+    private fun execute(sql: String) {
+        DriverManager.getConnection(DatabaseFactory.urlOf(dataDir)).use { connection ->
+            connection.createStatement().use { statement -> statement.execute(sql) }
+        }
+    }
+
+    /** 版 1 のデータベースを開くと移行が走り、state が 2 だった記事は既読になる。ほかの記事の状況は変わらない。 */
+    @Test
+    fun migratesVersion1ArticlesWithRemovedStateToRead() = runBlocking {
+        fun article(title: String) =
+            NewArticle(title, title, link = null, summary = null, content = null, author = null, category = null, publishedAt = null, sortAt = 0, state = ArticleState.UNREAD)
+        val channel = NewChannel("Example", "https://example.com/feed", null, null, paused = false, firstFetchAsRead = false, articles = listOf(article("kept"), article("unread")))
+        storeOf(dataDir).importNodes(listOf(channel))
+        execute("UPDATE article SET state = 2 WHERE title = 'kept'")
+        execute("PRAGMA user_version = 1")
+
+        val migrated = storeOf(dataDir)
+
+        assertEquals(LegirssDatabase.Schema.version, storedSchemaVersion())
+        assertEquals(
+            mapOf("kept" to ArticleState.READ, "unread" to ArticleState.UNREAD),
+            migrated.loadArticleRows(channelIds = null).associate { it.title to it.state },
+        )
     }
 
     /** スキーマの版が古いデータベースは、移行の前に、その時点の中身を持つ複製を版の名前で残す。 */
