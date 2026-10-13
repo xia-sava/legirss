@@ -63,6 +63,8 @@ data class MainUiState(
     val selectedNode: NodeSelection = NodeSelection.All,
     val selectedNodeName: String = ALL_ARTICLES_LABEL,
     val selectedNodeCount: ArticleCount = ArticleCount.ZERO,
+    /** 全チャンネルを合わせた記事数。 */
+    val totalCount: ArticleCount = ArticleCount.ZERO,
     val articles: List<ArticleRow> = emptyList(),
     val selectedArticleIndex: Int? = null,
     val channelNames: Map<Long, String> = emptyMap(),

@@ -189,6 +189,7 @@ class MainViewModel(
      * 表示したときは一覧を並べ直して選択を外し、一覧にフォーカスを置く。新着の印も消す。
      */
     fun setWindowVisible(visible: Boolean) {
+        if (windowVisible == visible) return
         windowVisible = visible
         if (!visible) return
         mutableState.update { it.copy(unseenNewArticles = false, listFocusRequest = it.listFocusRequest + 1) }
@@ -277,6 +278,7 @@ class MainViewModel(
         treeRows = tree.rows(expanded),
         selectedNodeName = tree.nameOf(selectedNode),
         selectedNodeCount = tree.countOf(selectedNode),
+        totalCount = tree.totalCount,
     )
 
     /** 一覧を作り直す。行の並びが変わるので選択は外す。 */
