@@ -212,12 +212,18 @@ class TrayController(
         private const val MENU_ITEM_HEIGHT_RATIO = 1.2
         private const val MENU_ITEM_SIDE_PADDING = 8
 
+        // アイコンの絵を描くときの基準の大きさ。座標はこの大きさで決めてあり、ほかの大きさでは拡大して描く。
         private const val ICON_SIZE = 32
 
-        /** 状態ごとの色で塗った角の丸い四角に、電波を表す点と弧を描く。 */
-        internal fun drawIcon(state: TrayState): BufferedImage = BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB).apply {
+        /**
+         * 状態ごとの色で塗った角の丸い四角に、電波を表す点と弧を描く。
+         *
+         * @param size 画像の一辺の画素数。
+         */
+        internal fun drawIcon(state: TrayState, size: Int = ICON_SIZE): BufferedImage = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB).apply {
             createGraphics().run {
                 setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                scale(size.toDouble() / ICON_SIZE, size.toDouble() / ICON_SIZE)
                 color = state.color
                 fillRoundRect(1, 1, 30, 30, 8, 8)
                 color = Color.WHITE

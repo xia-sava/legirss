@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -69,6 +71,7 @@ private const val UI_FONT_NAME = "Yu Gothic UI"
 private const val DATA_DIR_PROPERTY = "legirss.dataDir"
 private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val LAYOUT_SAVE_DELAY_MILLIS = 500L
+private const val WINDOW_ICON_SIZE = 64
 private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main(args: Array<String>) {
@@ -93,6 +96,7 @@ fun main(args: Array<String>) {
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
     val fontFamily = uiFontFamily()
+    val windowIcon = BitmapPainter(TrayController.drawIcon(TrayState.UNREAD, WINDOW_ICON_SIZE).toComposeImageBitmap())
     // 最初の描画から保存した配置で出すため、設定は画面を組み立てる前に読み終える。
     val settings = runBlocking { store.loadSettings() }
     val savedBounds = WindowBounds.fromSettings(settings)?.takeIf { it.isReachableOn(screenBounds()) }
@@ -176,6 +180,7 @@ fun main(args: Array<String>) {
             onCloseRequest = { windowVisible = false },
             visible = windowVisible,
             title = APP_NAME,
+            icon = windowIcon,
             state = windowState,
             onKeyEvent = { event ->
                 when {

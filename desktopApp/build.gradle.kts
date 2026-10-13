@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.JavaExec
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -23,9 +24,33 @@ tasks.test {
     useJUnitPlatform()
 }
 
+// 配布物の名前。インストール先のディレクトリ、起動用の実行ファイル、スタートメニューの表示名になる。
+val appPackageName = "legirss"
+
+// 版数は配布物を作るときに -Plegirss.version で渡す。渡さなければ既定値を使う。
+val appVersion = providers.gradleProperty("legirss.version").getOrElse("1.0.0")
+
 compose.desktop {
     application {
         mainClass = "to.sava.legirss.MainKt"
+
+        nativeDistributions {
+            targetFormats(TargetFormat.Msi)
+            packageName = appPackageName
+            packageVersion = appVersion
+            // 同梱する実行環境に含めるモジュール。suggestRuntimeModules タスクで求めたもの。
+            modules("java.instrument", "java.management", "java.net.http", "java.sql", "jdk.unsupported")
+
+            windows {
+                iconFile.set(project.file("icons/legirss.ico"))
+                // データを利用者の領域に持つ 1 人用のアプリなので、インストールに管理者の権限を求めない。
+                perUserInstall = true
+                // 版を上げたインストーラが前の版を置き換えるよう、アップグレードコードを固定する。
+                upgradeUuid = "70d7c713-b8e6-4c2c-bb95-bbfbff061988"
+                menu = true
+                menuGroup = appPackageName
+            }
+        }
     }
 }
 
