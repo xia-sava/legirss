@@ -24,6 +24,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // テストが作る一時ファイルを、利用者の一時領域ではなくビルドディレクトリの下に置く。
+    systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
 }
 
 // 配布物の名前。インストール先のディレクトリ、起動用の実行ファイル、スタートメニューの表示名になる。

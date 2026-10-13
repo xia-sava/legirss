@@ -37,6 +37,11 @@ kotlin {
     }
 }
 
+// テストが作る一時ファイルを、利用者の一時領域ではなくビルドディレクトリの下に置く。
+tasks.withType<Test>().configureEach {
+    systemProperty("java.io.tmpdir", temporaryDir.absolutePath)
+}
+
 sqldelight {
     databases {
         create("LegirssDatabase") {
