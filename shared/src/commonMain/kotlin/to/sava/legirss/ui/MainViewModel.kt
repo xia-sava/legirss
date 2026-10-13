@@ -90,6 +90,10 @@ class MainViewModel(
         scope.launch {
             updater.progress.collect { progress -> mutableState.update { it.copy(updateProgress = progress) } }
         }
+        // 更新している最中のチャンネルを、ツリーのアイコンで示す。
+        scope.launch {
+            updater.updatingChannelIds.collect { updating -> mutableState.update { it.copy(treeRows = tree.rows(expanded, updating)) } }
+        }
     }
 
     fun load() {
@@ -104,7 +108,7 @@ class MainViewModel(
 
     override fun toggleNode(selection: NodeSelection) {
         expanded = if (selection in expanded) expanded - selection else expanded + selection
-        mutableState.update { it.copy(treeRows = tree.rows(expanded)) }
+        mutableState.update { it.copy(treeRows = tree.rows(expanded, updater.updatingChannelIds.value)) }
     }
 
     override fun setFilter(filter: StateFilter) {
@@ -586,7 +590,7 @@ class MainViewModel(
     }
 
     private fun MainUiState.withTree(): MainUiState = copy(
-        treeRows = tree.rows(expanded),
+        treeRows = tree.rows(expanded, updater.updatingChannelIds.value),
         selectedNodeName = tree.nameOf(selectedNode),
         selectedNodeCount = tree.countOf(selectedNode),
         totalCount = tree.totalCount,

@@ -81,6 +81,17 @@ class MainStateTest {
         assertNull(tree.moveDestination(NodeSelection.All, NodeSelection.Node(1), TreeDropPlace.INTO))
     }
 
+    /** 更新している最中のチャンネルは、購読中止やエラーの印より優先して、更新中のアイコンで示す。 */
+    @Test
+    fun showsUpdatingIconForChannelsBeingUpdated() {
+        val rows = tree.rows(setOf(NodeSelection.All, NodeSelection.Node(1), NodeSelection.Node(3)), updating = setOf(2L, 4L))
+
+        assertEquals(
+            listOf(TreeIcon.ALL, TreeIcon.GROUP, TreeIcon.CHANNEL_UPDATING, TreeIcon.GROUP, TreeIcon.CHANNEL_UPDATING, TreeIcon.CHANNEL),
+            rows.map { it.icon },
+        )
+    }
+
     /** グループの記事数は配下のチャンネルの合計になり、「全ての記事」は全体の合計になる。 */
     @Test
     fun sumsCountsUpTheTree() {

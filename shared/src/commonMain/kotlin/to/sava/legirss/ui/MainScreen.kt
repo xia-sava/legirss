@@ -249,7 +249,7 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
             add(MenuEntry(RESUME_LABEL) { actions.setNodePaused(row.key, paused = false) })
         }
         TreeIcon.CHANNEL_PAUSED -> add(MenuEntry(RESUME_LABEL) { actions.setNodePaused(row.key, paused = false) })
-        TreeIcon.CHANNEL, TreeIcon.CHANNEL_ERROR -> add(MenuEntry(PAUSE_LABEL) { actions.setNodePaused(row.key, paused = true) })
+        TreeIcon.CHANNEL, TreeIcon.CHANNEL_ERROR, TreeIcon.CHANNEL_UPDATING -> add(MenuEntry(PAUSE_LABEL) { actions.setNodePaused(row.key, paused = true) })
     }
     add(null)
     add(MenuEntry(ADD_CHANNEL_MENU_LABEL, onClick = actions::openAddChannel))

@@ -244,7 +244,12 @@ class TreeModel(
         is NodeSelection.Node -> byId[selection.id]?.let(::channelsUnder).orEmpty()
     }
 
-    fun rows(expanded: Set<NodeSelection>): List<TreeRow<NodeSelection>> = buildList {
+    /**
+     * 表示用の行を、開いているノードの子だけをたどって作る。
+     *
+     * @param updating いま更新している最中のチャンネル。アイコンで示す。
+     */
+    fun rows(expanded: Set<NodeSelection>, updating: Set<Long> = emptySet()): List<TreeRow<NodeSelection>> = buildList {
         val rootExpanded = NodeSelection.All in expanded
         add(
             TreeRow(
@@ -257,10 +262,15 @@ class TreeModel(
                 expanded = rootExpanded,
             ),
         )
-        if (rootExpanded) topLevel().forEach { addRows(it, depth = 1, expanded) }
+        if (rootExpanded) topLevel().forEach { addRows(it, depth = 1, expanded, updating) }
     }
 
-    private fun MutableList<TreeRow<NodeSelection>>.addRows(node: TreeNode, depth: Int, expanded: Set<NodeSelection>) {
+    private fun MutableList<TreeRow<NodeSelection>>.addRows(
+        node: TreeNode,
+        depth: Int,
+        expanded: Set<NodeSelection>,
+        updating: Set<Long>,
+    ) {
         val key = NodeSelection.Node(node.id)
         val children = childrenOf(node)
         val count = countOf(node)
@@ -270,12 +280,12 @@ class TreeModel(
                 depth = depth,
                 label = labelOf(node.name, count),
                 bold = count.unread > 0,
-                icon = iconOf(node),
+                icon = if (node.id in updating) TreeIcon.CHANNEL_UPDATING else iconOf(node),
                 expandable = children.isNotEmpty(),
                 expanded = key in expanded,
             ),
         )
-        if (key in expanded) children.forEach { addRows(it, depth + 1, expanded) }
+        if (key in expanded) children.forEach { addRows(it, depth + 1, expanded, updating) }
     }
 
     private fun topLevel(): List<TreeNode> = childrenByParent[null].orEmpty()

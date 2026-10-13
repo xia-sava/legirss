@@ -48,6 +48,11 @@ class FeedUpdater(
     /** 実行中の更新の進み具合。実行していなければ null。 */
     val progress: StateFlow<UpdateProgress?> = mutableProgress.asStateFlow()
 
+    private val mutableUpdatingChannelIds = MutableStateFlow<Set<Long>>(emptySet())
+
+    /** いま取得や取り込みをしている最中のチャンネル。 */
+    val updatingChannelIds: StateFlow<Set<Long>> = mutableUpdatingChannelIds.asStateFlow()
+
     /**
      * 購読中のチャンネルを更新する。[channelIds] が null でなければ、その中のものに限る。
      *
@@ -75,6 +80,7 @@ class FeedUpdater(
 
     /** チャンネルを更新する。想定していない失敗は記録して、そのチャンネルの失敗として扱う。 */
     private suspend fun updateChannelOrReport(target: UpdateTarget, retention: Retention): Outcome = try {
+        mutableUpdatingChannelIds.update { it + target.channelId }
         updateChannel(target, retention)
     } catch (cancellation: CancellationException) {
         throw cancellation
@@ -82,6 +88,8 @@ class FeedUpdater(
         // 1 つのチャンネルで何が起きても、ほかのチャンネルの更新は続ける。そのため例外の種類を絞らない。
         reportError("チャンネルを更新できません: ${target.feedUrl}", exception)
         Outcome.Failed
+    } finally {
+        mutableUpdatingChannelIds.update { it - target.channelId }
     }
 
     private suspend fun updateChannel(target: UpdateTarget, retention: Retention): Outcome {

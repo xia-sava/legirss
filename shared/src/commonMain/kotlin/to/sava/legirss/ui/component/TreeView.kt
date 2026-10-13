@@ -66,6 +66,9 @@ enum class TreeIcon {
     CHANNEL,
     CHANNEL_PAUSED,
     CHANNEL_ERROR,
+
+    /** 更新している最中のチャンネル。 */
+    CHANNEL_UPDATING,
 }
 
 /** ツリーに表示する 1 行。開いているノードの子だけを、表示順に平らに並べて渡す。 */
@@ -342,6 +345,7 @@ private fun DrawScope.drawTreeIcon(icon: TreeIcon, colors: LegirssColors) {
         TreeIcon.CHANNEL -> drawChannel(colors.iconChannel, unit)
         TreeIcon.CHANNEL_PAUSED -> drawChannel(colors.iconPaused, unit)
         TreeIcon.CHANNEL_ERROR -> drawChannel(colors.iconError, unit)
+        TreeIcon.CHANNEL_UPDATING -> drawChannel(colors.iconUpdating, unit)
     }
 }
 
