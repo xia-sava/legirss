@@ -99,6 +99,7 @@ class TrayController(
     private val onToggleWindow: () -> Unit,
     private val onShowWindow: () -> Unit,
     private val onUpdate: () -> Unit,
+    private val onOpenSettings: () -> Unit,
     private val onExit: () -> Unit,
     private val startup: StartupRegistration,
 ) {
@@ -171,6 +172,7 @@ class TrayController(
         add(menuItem(JMenuItem(SHOW_LABEL)) { onShowWindow() })
         add(menuItem(JMenuItem(UPDATE_LABEL)) { onUpdate() })
         addSeparator()
+        add(menuItem(JMenuItem(SETTINGS_LABEL)) { onOpenSettings() })
         add(createStartupItem())
         addSeparator()
         add(menuItem(JMenuItem(EXIT_LABEL)) { onExit() })
@@ -202,7 +204,8 @@ class TrayController(
         private const val APP_TITLE = "legirss"
         private const val SHOW_LABEL = "表示"
         private const val UPDATE_LABEL = "更新"
-        private const val STARTUP_LABEL = "Windows の起動時に開始する"
+        private const val SETTINGS_LABEL = "設定…"
+        private const val STARTUP_LABEL ="Windows の起動時に開始する"
         private const val EXIT_LABEL = "終了"
 
         // メニューの 1 行の高さを、文字の高さの何倍にするか。

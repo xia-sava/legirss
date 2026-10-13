@@ -23,6 +23,10 @@ data class Retention(
 ) {
     companion object {
         val DEFAULT = Retention(keepCount = 100, keepDays = 60)
+
+        /** 残す数と残す日数を保存する設定の名前。 */
+        const val KEEP_COUNT_KEY = "keep_count"
+        const val KEEP_DAYS_KEY = "keep_days"
     }
 }
 

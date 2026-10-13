@@ -1,5 +1,6 @@
 package to.sava.legirss.ui.component
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -30,7 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -52,6 +56,7 @@ private val INPUT_VERTICAL_PADDING = 3.dp
 private val BUTTON_HEIGHT = 24.dp
 private val BUTTON_MIN_WIDTH = 76.dp
 private val BUTTON_PADDING = 10.dp
+private val CHECKBOX_SIZE = 13.dp
 
 /**
  * 画面の手前に出して、閉じるまで後ろの画面を操作させない窓。Esc で閉じる。
@@ -119,6 +124,29 @@ fun DialogButton(label: String, onClick: () -> Unit, enabled: Boolean = true) {
         contentAlignment = Alignment.Center,
     ) {
         BasicText(label, style = style.textStyle(color = if (enabled) style.colors.text else style.colors.textDim))
+    }
+}
+
+/** 見出しの文つきのチェックボックス。文のところを押しても切り替わる。 */
+@Composable
+fun Checkbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String) {
+    val style = LocalLegirssStyle.current
+    Row(
+        modifier = Modifier.clickable(remember { MutableInteractionSource() }, indication = null) { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(DIALOG_ITEM_GAP),
+    ) {
+        Canvas(Modifier.size(CHECKBOX_SIZE).border(BORDER_WIDTH, style.colors.border).background(style.colors.background)) {
+            if (!checked) return@Canvas
+            val unit = size.minDimension / 12f
+            val mark = Path().apply {
+                moveTo(2.5f * unit, 6f * unit)
+                lineTo(5f * unit, 8.5f * unit)
+                lineTo(9.5f * unit, 3.5f * unit)
+            }
+            drawPath(mark, style.colors.text, style = Stroke(width = 1.5f * unit))
+        }
+        BasicText(label, style = style.textStyle())
     }
 }
 

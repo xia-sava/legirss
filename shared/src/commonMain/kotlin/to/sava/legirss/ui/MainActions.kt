@@ -11,6 +11,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.ui.component.TreeDropPlace
 
 /** メイン画面から呼ぶ操作。 */
@@ -66,6 +67,10 @@ interface MainActions {
     fun sortChildrenByName(selection: NodeSelection)
 
     fun moveNode(source: NodeSelection, target: NodeSelection, place: TreeDropPlace)
+
+    fun openSettings()
+
+    fun submitSettings(settings: AppSettings)
 
     fun closeDialog()
 }

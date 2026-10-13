@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import to.sava.legirss.data.db.LegirssDatabase
 import to.sava.legirss.feed.ParsedFeed
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleBody
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
@@ -194,14 +195,7 @@ class LegirssStore(
     }
 
     /** 既読の記事を残す範囲の設定。保存されていない項目は既定値になる。 */
-    suspend fun loadRetention(): Retention = access {
-        Retention(
-            keepCount = settingAsInt(KEEP_COUNT_KEY) ?: Retention.DEFAULT.keepCount,
-            keepDays = settingAsInt(KEEP_DAYS_KEY) ?: Retention.DEFAULT.keepDays,
-        )
-    }
-
-    private fun settingAsInt(key: String): Int? = queries.selectSetting(key).executeAsOneOrNull()?.toIntOrNull()
+    suspend fun loadRetention(): Retention = AppSettings.fromSettings(loadSettings()).retention
 
     /** 更新の失敗を記録する。[paused] が true なら購読中止にする。 */
     suspend fun recordFetchFailure(
@@ -357,9 +351,6 @@ class LegirssStore(
     ): ArticleRow = ArticleRow(id, channelId, title, link, author, category, publishedAt, sortAt, ArticleState.fromCode(state))
 
     private companion object {
-        const val KEEP_COUNT_KEY = "keep_count"
-        const val KEEP_DAYS_KEY = "keep_days"
-
         const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
 
         /** 整理・削除した記事の識別子を、フィードで見かけなくなってから控えておく期間。 */

@@ -2,6 +2,7 @@ package to.sava.legirss.ui
 
 import to.sava.legirss.feed.FeedCandidate
 import to.sava.legirss.html.HtmlBlock
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -80,6 +81,9 @@ sealed interface DialogState {
         val initialText: String,
     ) : DialogState
 
+    /** 設定の変更。 */
+    data object Settings : DialogState
+
     /** ノードの削除の確認。 */
     data class ConfirmDelete(
         val nodeId: Long,
@@ -120,6 +124,7 @@ data class MainUiState(
     val listFocusRequest: Int = 0,
     /** 手前に出している窓。出していなければ null。 */
     val dialog: DialogState? = null,
+    val settings: AppSettings = AppSettings(),
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
 

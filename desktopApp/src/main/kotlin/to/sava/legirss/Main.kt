@@ -22,6 +22,7 @@ import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
@@ -38,6 +39,7 @@ import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedHttp
 import to.sava.legirss.feed.FeedLocator
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
@@ -63,7 +65,6 @@ import kotlin.math.roundToInt
 private const val APP_NAME = "legirss"
 private const val UI_FONT_NAME = "Yu Gothic UI"
 private const val DATA_DIR_PROPERTY = "legirss.dataDir"
-private const val AUTOMATIC_UPDATE_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val LAYOUT_SAVE_DELAY_MILLIS = 500L
 private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
@@ -89,7 +90,7 @@ fun main(args: Array<String>) {
         reportError = AppLog::error,
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
-    val style = LegirssStyle(fontFamily = uiFontFamily())
+    val fontFamily = uiFontFamily()
     // 最初の描画から保存した配置で出すため、設定は画面を組み立てる前に読み終える。
     val settings = runBlocking { store.loadSettings() }
     val savedBounds = WindowBounds.fromSettings(settings)?.takeIf { it.isReachableOn(screenBounds()) }
@@ -108,9 +109,18 @@ fun main(args: Array<String>) {
                 now = System::currentTimeMillis,
                 openUrl = ::openInBrowser,
                 reportError = AppLog::error,
+                initialSettings = AppSettings.fromSettings(settings),
             ).also(MainViewModel::load)
         }
         val state by viewModel.state.collectAsState()
+        val style = remember(state.settings) {
+            LegirssStyle(
+                fontFamily = fontFamily,
+                treeFontSize = state.settings.treeFontSize.sp,
+                listFontSize = state.settings.listFontSize.sp,
+                articleFontSize = state.settings.articleFontSize.sp,
+            )
+        }
         val windowState = rememberWindowState(
             placement = if (savedMaximized) WindowPlacement.Maximized else WindowPlacement.Floating,
             position = savedBounds?.let { WindowPosition(it.x.dp, it.y.dp) } ?: WindowPosition.PlatformDefault,
@@ -133,6 +143,10 @@ fun main(args: Array<String>) {
                 onToggleWindow = { windowVisible = !windowVisible },
                 onShowWindow = { windowVisible = true },
                 onUpdate = viewModel::updateAll,
+                onOpenSettings = {
+                    windowVisible = true
+                    viewModel.openSettings()
+                },
                 onExit = ::exitApplication,
                 startup = StartupRegistration.forCurrentProcess(),
             ).also(TrayController::install)
@@ -143,7 +157,7 @@ fun main(args: Array<String>) {
         }
 
         LaunchedEffect(windowVisible) { viewModel.setWindowVisible(windowVisible) }
-        LaunchedEffect(Unit) { viewModel.runAutomaticUpdates(AUTOMATIC_UPDATE_INTERVAL_MILLIS) }
+        LaunchedEffect(Unit) { viewModel.runAutomaticUpdates() }
         LaunchedEffect(Unit) { runDailyBackups(backup) }
 
         // 最小化はタスクトレイへしまう操作として扱う。

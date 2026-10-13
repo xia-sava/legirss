@@ -11,6 +11,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -18,6 +21,7 @@ import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedLocator
 import to.sava.legirss.feed.FeedLookup
 import to.sava.legirss.html.HtmlBlocks
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
@@ -41,8 +45,10 @@ class MainViewModel(
     private val openUrl: (String) -> Unit,
     /** 想定していない失敗を、説明と原因を添えて記録する。 */
     private val reportError: (String, Throwable) -> Unit,
+    /** 起動した時点で保存されていた設定。 */
+    initialSettings: AppSettings,
 ) : MainActions {
-    private val mutableState = MutableStateFlow(MainUiState())
+    private val mutableState = MutableStateFlow(MainUiState(settings = initialSettings))
     val state: StateFlow<MainUiState> = mutableState.asStateFlow()
 
     /**
@@ -355,12 +361,30 @@ class MainViewModel(
         return (lastUpdatedAt + intervalMillis - now()).coerceIn(0, intervalMillis)
     }
 
-    /** [intervalMillis] ごとに定期更新を続ける。呼び出したコルーチンが取り消されるまで戻らない。 */
-    suspend fun runAutomaticUpdates(intervalMillis: Long): Nothing {
-        while (true) {
-            delay(millisUntilNextAutomaticUpdate(intervalMillis))
-            updateAutomatically().join()
+    /**
+     * 設定の間隔ごとに定期更新を続ける。呼び出したコルーチンが取り消されるまで戻らない。
+     *
+     * 間隔の設定が変わったら、新しい間隔で待ち直す。
+     */
+    suspend fun runAutomaticUpdates() {
+        state.map { it.settings.updateIntervalMinutes * MILLIS_PER_MINUTE }.distinctUntilChanged().collectLatest { intervalMillis ->
+            while (true) {
+                delay(millisUntilNextAutomaticUpdate(intervalMillis))
+                updateAutomatically().join()
+            }
         }
+    }
+
+    override fun openSettings() {
+        mutableState.update { it.copy(dialog = DialogState.Settings) }
+    }
+
+    /** 設定を、取りうる範囲に収めてから反映して保存する。 */
+    override fun submitSettings(settings: AppSettings) {
+        val accepted = settings.validated()
+        closeDialog()
+        mutableState.update { it.copy(settings = accepted) }
+        scope.launch { store.saveSettings(accepted.toSettings()) }
     }
 
     /**
@@ -473,6 +497,8 @@ class MainViewModel(
         const val UNEXPECTED_ERROR_MESSAGE = "エラーが発生しました"
         const val CHOOSE_FEED_MESSAGE = "登録するフィードを選んでください"
         const val DUPLICATE_FEED_MESSAGE = "このフィードは登録済みです。もう一度「追加」を押すと重ねて登録します"
+
+        const val MILLIS_PER_MINUTE = 60 * 1000L
 
         /** 全体の更新を最後に試みた時刻を保存する設定の名前。 */
         const val LAST_UPDATE_KEY = "last_update_at"

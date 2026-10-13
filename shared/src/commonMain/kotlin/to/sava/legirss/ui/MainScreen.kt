@@ -87,6 +87,7 @@ private const val UPDATE_ALL_LABEL = "更新"
 private const val UPDATE_SELECTED_LABEL = "選択更新"
 private const val CANCEL_UPDATE_LABEL = "中止"
 private const val ADD_CHANNEL_LABEL = "追加"
+private const val SETTINGS_LABEL = "設定"
 
 private const val UPDATE_NODE_LABEL = "更新"
 private const val PAUSE_LABEL = "購読中止"
@@ -115,7 +116,7 @@ fun MainScreen(
     val style = LocalLegirssStyle.current
     Box(modifier.fillMaxSize()) {
         MainContent(state, actions, articleScroll, layout, onLayoutChange)
-        state.dialog?.let { DialogHost(it, actions) }
+        state.dialog?.let { DialogHost(it, state.settings, actions) }
     }
 }
 
@@ -272,6 +273,8 @@ private fun Toolbar(state: MainUiState, actions: MainActions) {
             onSelect = actions::setFilter,
             modifier = Modifier.fillMaxHeight(),
         )
+        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
+        ToolbarButton(SETTINGS_LABEL, onClick = actions::openSettings)
     }
 }
 
@@ -307,7 +310,7 @@ private fun ArticleTable(
         sortDescending = state.sort.descending,
         onColumnClick = actions::sortBy,
         onColumnResize = onColumnResize,
-        centerSelection = true,
+        centerSelection = state.settings.centerSelection,
         modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
         focusRequester = focusRequester,
     ) { article, column ->

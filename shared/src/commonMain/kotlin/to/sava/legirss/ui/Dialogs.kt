@@ -5,15 +5,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -25,7 +30,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import to.sava.legirss.feed.FeedCandidate
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.NodeKind
+import to.sava.legirss.model.Retention
+import to.sava.legirss.ui.component.Checkbox
 import to.sava.legirss.ui.component.DialogButton
 import to.sava.legirss.ui.component.DialogButtons
 import to.sava.legirss.ui.component.DialogText
@@ -51,13 +59,102 @@ private const val DELETE_CHANNEL_CONSEQUENCE = "このチャンネルの記事�
 
 private val CANDIDATE_PADDING = 4.dp
 
-/** 手前に出す窓を、[dialog] の種類に合わせて描く。 */
+private const val SETTINGS_TITLE = "設定"
+private const val TREE_FONT_SIZE_LABEL = "ツリーの文字の大きさ"
+private const val LIST_FONT_SIZE_LABEL = "記事の一覧の文字の大きさ"
+private const val ARTICLE_FONT_SIZE_LABEL = "記事の本文の文字の大きさ"
+private const val UPDATE_INTERVAL_LABEL = "定期更新の間隔（分）"
+private const val KEEP_COUNT_LABEL = "既読の記事を残す数（チャンネルごと）"
+private const val KEEP_DAYS_LABEL = "既読の記事を残す日数"
+private const val RETENTION_NOTE = "未読の記事と保護した記事は、数と日数に関わらず残します。"
+private const val CENTER_SELECTION_LABEL = "キーで選択を動かしたとき、選択行を一覧の中央へ寄せる"
+
+private const val MAX_NUMBER_DIGITS = 5
+private val NUMBER_INPUT_WIDTH = 64.dp
+private val NUMBER_RANGE_WIDTH = 72.dp
+private val NUMBER_ROW_GAP = 8.dp
+
+/**
+ * 手前に出す窓を、[dialog] の種類に合わせて描く。
+ *
+ * @param settings いまの設定。設定の窓を開いたときに、入力欄へ入れておく。
+ */
 @Composable
-fun DialogHost(dialog: DialogState, actions: MainActions) {
+fun DialogHost(dialog: DialogState, settings: AppSettings, actions: MainActions) {
     when (dialog) {
         is DialogState.AddChannel -> AddChannelDialog(dialog, actions)
         is DialogState.EditText -> EditTextDialog(dialog, actions)
         is DialogState.ConfirmDelete -> ConfirmDeleteDialog(dialog, actions)
+        DialogState.Settings -> SettingsDialog(settings, actions)
+    }
+}
+
+/** 数を入れる欄の中身。数字だけを、決まった桁数まで受け付ける。 */
+private class NumberEntry(initial: Int) {
+    var value by mutableStateOf(TextFieldValue(initial.toString()))
+        private set
+
+    fun accept(entered: TextFieldValue) {
+        if (entered.text.length <= MAX_NUMBER_DIGITS && entered.text.all(Char::isDigit)) value = entered
+    }
+
+    /** 入っている数。空のときは [fallback]。 */
+    fun numberOr(fallback: Int): Int = value.text.toIntOrNull() ?: fallback
+}
+
+@Composable
+private fun SettingsDialog(current: AppSettings, actions: MainActions) {
+    val treeFontSize = remember { NumberEntry(current.treeFontSize) }
+    val listFontSize = remember { NumberEntry(current.listFontSize) }
+    val articleFontSize = remember { NumberEntry(current.articleFontSize) }
+    val updateInterval = remember { NumberEntry(current.updateIntervalMinutes) }
+    val keepCount = remember { NumberEntry(current.retention.keepCount) }
+    val keepDays = remember { NumberEntry(current.retention.keepDays) }
+    var centerSelection by remember { mutableStateOf(current.centerSelection) }
+    val submit = {
+        actions.submitSettings(
+            AppSettings(
+                treeFontSize = treeFontSize.numberOr(current.treeFontSize),
+                listFontSize = listFontSize.numberOr(current.listFontSize),
+                articleFontSize = articleFontSize.numberOr(current.articleFontSize),
+                updateIntervalMinutes = updateInterval.numberOr(current.updateIntervalMinutes),
+                retention = Retention(
+                    keepCount = keepCount.numberOr(current.retention.keepCount),
+                    keepDays = keepDays.numberOr(current.retention.keepDays),
+                ),
+                centerSelection = centerSelection,
+            ),
+        )
+    }
+    ModalDialog(SETTINGS_TITLE, onDismiss = actions::closeDialog) {
+        NumberRow(TREE_FONT_SIZE_LABEL, AppSettings.FONT_SIZE_RANGE, treeFontSize, submit, requestFocus = true)
+        NumberRow(LIST_FONT_SIZE_LABEL, AppSettings.FONT_SIZE_RANGE, listFontSize, submit)
+        NumberRow(ARTICLE_FONT_SIZE_LABEL, AppSettings.FONT_SIZE_RANGE, articleFontSize, submit)
+        NumberRow(UPDATE_INTERVAL_LABEL, AppSettings.UPDATE_INTERVAL_RANGE, updateInterval, submit)
+        NumberRow(KEEP_COUNT_LABEL, AppSettings.KEEP_COUNT_RANGE, keepCount, submit)
+        NumberRow(KEEP_DAYS_LABEL, AppSettings.KEEP_DAYS_RANGE, keepDays, submit)
+        DialogText(RETENTION_NOTE, dim = true)
+        Checkbox(centerSelection, onCheckedChange = { centerSelection = it }, label = CENTER_SELECTION_LABEL)
+        DialogButtons {
+            DialogButton(OK_LABEL, onClick = submit)
+            DialogButton(CANCEL_LABEL, onClick = actions::closeDialog)
+        }
+    }
+}
+
+/** 見出し、数を入れる欄、入れられる範囲を 1 行に並べる。 */
+@Composable
+private fun NumberRow(label: String, range: IntRange, entry: NumberEntry, onSubmit: () -> Unit, requestFocus: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NUMBER_ROW_GAP)) {
+        Box(Modifier.weight(1f)) { DialogText(label) }
+        TextInput(
+            value = entry.value,
+            onValueChange = entry::accept,
+            onSubmit = onSubmit,
+            modifier = Modifier.width(NUMBER_INPUT_WIDTH),
+            requestFocus = requestFocus,
+        )
+        Box(Modifier.width(NUMBER_RANGE_WIDTH)) { DialogText("${range.first}〜${range.last}", dim = true) }
     }
 }
 

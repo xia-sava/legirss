@@ -14,10 +14,12 @@ import to.sava.legirss.feed.FeedFetcher
 import to.sava.legirss.feed.FeedLocator
 import to.sava.legirss.html.HtmlBlock
 import to.sava.legirss.html.InlineText
+import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NewArticle
 import to.sava.legirss.model.NewChannel
+import to.sava.legirss.model.Retention
 import to.sava.legirss.ui.component.TreeDropPlace
 import to.sava.legirss.update.FeedUpdater
 import kotlin.test.Test
@@ -80,6 +82,7 @@ class MainViewModelTest {
             now = { clockFailure?.let { throw it } ?: clock },
             openUrl = openedUrls::add,
             reportError = reportError,
+            initialSettings = AppSettings(),
         ).also(MainViewModel::load)
     }
 
@@ -400,6 +403,21 @@ class MainViewModelTest {
 
         assertEquals(listOf("全ての記事 (2/3)", "News (2/3)", "Example (2/3)"), viewModel.treeLabels)
         assertEquals(listOf(0, 1, 2), viewModel.state.value.treeRows.map { it.depth })
+    }
+
+    /** 設定を決めると、範囲に収めた値が画面の状態に反映され、保存される。保存した値は次の更新での記事の整理に使われる。 */
+    @Test
+    fun appliesAndSavesSettings() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.openSettings()
+
+        viewModel.submitSettings(AppSettings(listFontSize = 100, updateIntervalMinutes = 5, retention = Retention(keepCount = 20, keepDays = 7)))
+
+        val expected = AppSettings(listFontSize = 32, updateIntervalMinutes = 30, retention = Retention(keepCount = 20, keepDays = 7))
+        assertEquals(expected, viewModel.state.value.settings)
+        assertEquals(expected, AppSettings.fromSettings(store.loadSettings()))
+        assertEquals(Retention(keepCount = 20, keepDays = 7), store.loadRetention())
+        assertNull(viewModel.state.value.dialog)
     }
 
     /** フィードの URL を変えると、次の更新は新しい URL から取得する。 */

@@ -133,4 +133,13 @@ class MainScreenRenderTest {
 
         assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
     }
+
+    /** 設定の窓を、いまの設定を入力欄に入れた状態で描画できる。 */
+    @Test
+    fun rendersSettingsDialog() {
+        val image = MainScreenRenderer.render(MainUiState(dialog = DialogState.Settings))
+        MainScreenRenderer.save(image, Path.of("build", "preview", "settings.png"))
+
+        assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
+    }
 }
