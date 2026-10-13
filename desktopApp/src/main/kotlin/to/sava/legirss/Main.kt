@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import to.sava.legirss.data.DatabaseBackup
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
@@ -77,6 +78,9 @@ private const val DATA_DIR_PROPERTY = "legirss.dataDir"
 private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val LAYOUT_SAVE_DELAY_MILLIS = 500L
 private const val WINDOW_ICON_SIZE = 64
+
+// 一時ファイルを置く場所を持つシステムプロパティ。
+private const val TEMP_DIR_PROPERTY = "java.io.tmpdir"
 private const val UPDATE_CHECK_INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
 
 // 自分の版を読めなかったときに使う版。どの配布中の版よりも古いものとして扱う。
@@ -178,11 +182,20 @@ fun main(args: Array<String>) {
         LaunchedEffect(Unit) { viewModel.runAutomaticUpdates() }
         LaunchedEffect(Unit) { runDailyBackups(backup) }
 
+        val updateHttp = remember { UpdateHttp(Dispatchers.IO) }
+        val installer = remember {
+            UpdateInstaller(
+                launcherPath = StartupRegistration.launcherPath(),
+                logDir = dataDir,
+                downloadRoot = Path.of(System.getProperty(TEMP_DIR_PROPERTY)),
+                download = updateHttp::download,
+            )
+        }
+        // 前の版から更新した直後なら、そのときに取得した配布物が残っているので片付ける。
+        LaunchedEffect(Unit) { removeOldDownloads(installer) }
         val appUpdater = remember {
-            val http = UpdateHttp(Dispatchers.IO)
-            val installer = UpdateInstaller(StartupRegistration.launcherPath(), dataDir, http::download)
             AppUpdater(
-                checker = UpdateChecker(AppVersion.current() ?: UNKNOWN_VERSION, UpdateManifest.PUBLIC_KEY, http::fetch),
+                checker = UpdateChecker(AppVersion.current() ?: UNKNOWN_VERSION, UpdateManifest.PUBLIC_KEY, updateHttp::fetch),
                 canInstall = installer.isSupported,
                 download = installer::downloadVerified,
                 launch = installer::launch,
@@ -241,6 +254,17 @@ fun main(args: Array<String>) {
                     toolbarNotice = updateNoticeOf(updateState, onInstall = appUpdater::install),
                 )
             }
+        }
+    }
+}
+
+/** 前に取得した配布物を片付ける。片付けられなかった場合は理由を記録し、次に起動したときにもう一度試みる。 */
+private suspend fun removeOldDownloads(installer: UpdateInstaller) {
+    withContext(Dispatchers.IO) {
+        try {
+            installer.removeOldDownloads()
+        } catch (exception: IOException) {
+            AppLog.warn("前に取得した配布物を片付けられません", exception)
         }
     }
 }

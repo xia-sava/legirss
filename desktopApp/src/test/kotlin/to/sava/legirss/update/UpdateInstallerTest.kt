@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -14,9 +15,19 @@ class UpdateInstallerTest {
     private val content = "installer bytes".encodeToByteArray()
     private val downloadedTo = mutableListOf<Path>()
 
+    /** このテストが作るファイルを全て置く場所。テストが終わったら消す。 */
+    private val workDir: Path = Files.createTempDirectory("legirss-installer-test")
+    private val downloadRoot: Path = Files.createDirectory(workDir.resolve("downloads"))
+
+    @AfterTest
+    fun removeWorkDir() {
+        workDir.toFile().deleteRecursively()
+    }
+
     private fun installer(launcherPath: String? = """C:\Apps\legirss\legirss.exe""") = UpdateInstaller(
         launcherPath = launcherPath,
-        logDir = Files.createTempDirectory("legirss-update-test-log"),
+        logDir = workDir,
+        downloadRoot = downloadRoot,
         download = { _, target ->
             downloadedTo.add(target)
             Files.write(target, content)
@@ -25,22 +36,38 @@ class UpdateInstallerTest {
 
     private fun release(sha256: String) = UpdateRelease(version("0.2.0"), sha256)
 
+    private fun fileOf(name: String, bytes: ByteArray): Path = Files.write(workDir.resolve(name), bytes)
+
     /** ファイルの SHA-256 を 16 進の小文字で求める。 */
     @Test
     fun computesSha256OfFile() {
-        val file = Files.createTempFile("legirss-update-test", ".bin").also { Files.write(it, "abc".encodeToByteArray()) }
-
-        assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", sha256Of(file))
+        assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", sha256Of(fileOf("abc.bin", "abc".encodeToByteArray())))
     }
 
     /** 取得した配布物の照合値がマニフェストと合えば、置いた場所を返す。 */
     @Test
     fun returnsDownloadedInstallerWhenDigestMatches() = runTest {
-        val expected = sha256Of(Files.createTempFile("legirss-update-test", ".bin").also { Files.write(it, content) })
+        val expected = sha256Of(fileOf("expected.bin", content))
 
         val installed = installer().downloadVerified(release(expected))
 
         assertEquals(content.toList(), Files.readAllBytes(installed).toList())
+    }
+
+    /** 前に取得した配布物は、置いたディレクトリごと消す。同じ場所にある、ほかのディレクトリやファイルには触れない。 */
+    @Test
+    fun removesOldDownloadsOnly() = runTest {
+        val installer = installer()
+        val downloaded = installer.downloadVerified(release(sha256Of(fileOf("expected.bin", content))))
+        Files.writeString(downloaded.resolveSibling("legirss-apply-update.ps1"), "script")
+        val unrelatedDir = Files.createDirectory(downloadRoot.resolve("legirss-update-notes"))
+        val unrelatedFile = Files.writeString(downloadRoot.resolve("legirss-update123"), "not a directory")
+
+        installer.removeOldDownloads()
+
+        assertFalse(Files.exists(downloaded.parent))
+        assertTrue(Files.exists(unrelatedDir))
+        assertTrue(Files.exists(unrelatedFile))
     }
 
     /** 照合値が合わない配布物は受け付けず、取得したファイルを残さない。 */

@@ -5,9 +5,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.io.path.deleteIfExists
+import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
 
 private const val DOWNLOAD_DIR_PREFIX = "legirss-update"
+
+// 取得した配布物を置くディレクトリの名前。接頭辞のあとに、作るたびに変わる数字が付く。
+private val downloadDirName = Regex("""$DOWNLOAD_DIR_PREFIX\d+""")
 private const val INSTALLER_FILE_NAME = "legirss-update.msi"
 private const val APPLY_SCRIPT_NAME = "legirss-apply-update.ps1"
 private const val APPLY_LOG_NAME = "update-apply.log"
@@ -73,11 +77,13 @@ internal fun sha256Of(file: Path): String {
  *
  * @param launcherPath インストールされているアプリの実行ファイル。配布物として動いていなければ null で、その場合は入れられない。
  * @param logDir 入れた結果を書き残すファイルを置く場所。
+ * @param downloadRoot 取得した配布物を置くディレクトリを作る場所。
  * @param download URL の中身をファイルへ保存する。保存できなければ [IOException] を投げる。
  */
 internal class UpdateInstaller(
     private val launcherPath: String?,
     private val logDir: Path,
+    private val downloadRoot: Path,
     private val download: suspend (url: String, target: Path) -> Unit,
 ) {
     /** 新しい版を入れられる動かし方をしているか。 */
@@ -91,7 +97,7 @@ internal class UpdateInstaller(
      * @throws IOException 取得できない。または、取得したものの照合値が合わない。
      */
     suspend fun downloadVerified(release: UpdateRelease): Path {
-        val installer = Files.createTempDirectory(DOWNLOAD_DIR_PREFIX).resolve(INSTALLER_FILE_NAME)
+        val installer = Files.createTempDirectory(downloadRoot, DOWNLOAD_DIR_PREFIX).resolve(INSTALLER_FILE_NAME)
         try {
             download(UpdateSource.INSTALLER_URL, installer)
             if (sha256Of(installer) != release.sha256) throw IOException("取得した配布物の照合値が合いません")
@@ -123,10 +129,27 @@ internal class UpdateInstaller(
         ).start()
     }
 
+    /**
+     * 前に取得した配布物と、それを入れるのに使ったスクリプトを、置いたディレクトリごと消す。
+     *
+     * 入れ終えたあとの配布物は、入れたアプリが次に起動するまで残っている。起動したときに呼んで片付ける。
+     *
+     * @throws IOException 消せない。
+     */
+    fun removeOldDownloads() {
+        if (!Files.isDirectory(downloadRoot)) return
+        downloadRoot.listDirectoryEntries()
+            .filter { downloadDirName.matches(it.name) && Files.isDirectory(it) }
+            .forEach { directory ->
+                directory.listDirectoryEntries().forEach(Files::delete)
+                Files.delete(directory)
+            }
+    }
+
     /** 取得した配布物と、それを置いた場所を捨てる。 */
     private fun discard(installer: Path) {
         installer.deleteIfExists()
-        installer.parent?.takeIf { it.name.startsWith(DOWNLOAD_DIR_PREFIX) }?.deleteIfExists()
+        installer.parent?.takeIf { downloadDirName.matches(it.name) }?.deleteIfExists()
     }
 
     /** PowerShell の本体。探す場所を PATH に任せず、%SystemRoot% から組み立てる。 */
