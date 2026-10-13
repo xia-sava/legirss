@@ -16,13 +16,17 @@ kotlin {
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.ksoup)
+            implementation(libs.ktor.client.core)
             implementation(libs.sqldelight.runtime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
         }
         jvmMain.dependencies {
+            implementation(libs.ktor.client.cio)
             implementation(libs.sqldelight.sqliteDriver)
         }
         jvmTest.dependencies {
