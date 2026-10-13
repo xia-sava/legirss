@@ -167,4 +167,14 @@ class FeedParserTest {
         assertEquals("https://other.example/x", resolveUrl("https://example.com/a/b", "https://other.example/x"))
         assertEquals("c", resolveUrl(null, "c"))
     }
+
+    /** 相対 URL に含まれる `.` と `..` を解決する。ルートより上へは出ない。ディレクトリを指す末尾の区切りは保つ。 */
+    @Test
+    fun resolvesDotSegments() {
+        assertEquals("https://example.com/c", resolveUrl("https://example.com/a/b", "../c"))
+        assertEquals("https://example.com/a/c", resolveUrl("https://example.com/a/b", "./c"))
+        assertEquals("https://example.com/c", resolveUrl("https://example.com/a/b", "../../c"))
+        assertEquals("https://example.com/a/", resolveUrl("https://example.com/a/b/c", ".."))
+        assertEquals("https://example.com/x?q=1", resolveUrl("https://example.com/a/b", "../x?q=1"))
+    }
 }

@@ -29,10 +29,27 @@ data class ParsedItem(
 fun resolveUrl(base: String?, reference: String): String {
     if (base.isNullOrBlank()) return reference
     return try {
-        URLBuilder(base).takeFrom(reference).buildString()
+        URLBuilder(base).takeFrom(reference).apply { encodedPathSegments = withoutDotSegments(encodedPathSegments) }.buildString()
     } catch (_: URLParserException) {
         reference
     } catch (_: IllegalArgumentException) {
         reference
     }
+}
+
+private const val CURRENT_SEGMENT = "."
+private const val PARENT_SEGMENT = ".."
+
+/** パスの区切りごとの並びから `.` と `..` を解決して取り除く。先頭の空の要素はルートを表すので残す。 */
+private fun withoutDotSegments(segments: List<String>): List<String> {
+    val resolved = segments.fold(emptyList<String>()) { kept, segment ->
+        when (segment) {
+            CURRENT_SEGMENT -> kept
+            PARENT_SEGMENT -> if (kept.lastOrNull().isNullOrEmpty()) kept else kept.dropLast(1)
+            else -> kept + segment
+        }
+    }
+    // `.` や `..` で終わるパスはディレクトリを指すので、末尾の区切りを保つ。
+    val endsWithDirectory = segments.lastOrNull() in setOf(CURRENT_SEGMENT, PARENT_SEGMENT)
+    return if (endsWithDirectory && resolved.lastOrNull() != "") resolved + "" else resolved
 }
