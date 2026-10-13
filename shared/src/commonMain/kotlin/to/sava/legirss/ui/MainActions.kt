@@ -50,6 +50,20 @@ interface MainActions {
 
     fun submitAddChannel(url: String)
 
+    fun openAddGroup()
+
+    fun openRename(selection: NodeSelection)
+
+    fun openChangeFeedUrl(selection: NodeSelection)
+
+    fun submitText(text: String)
+
+    fun requestDelete(selection: NodeSelection)
+
+    fun confirmDelete()
+
+    fun sortChildrenByName(selection: NodeSelection)
+
     fun closeDialog()
 }
 

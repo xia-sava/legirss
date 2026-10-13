@@ -71,6 +71,30 @@ sealed interface DialogState {
         /** 登録済みだと知らせたフィードの URL。同じフィードをもう一度指定されたら、重ねて登録する。 */
         val duplicateUrl: String? = null,
     ) : DialogState
+
+    /** 1 行の文字の入力。 */
+    data class EditText(
+        val target: EditTarget,
+        /** 開いたときに入力欄へ入れておく文字。 */
+        val initialText: String,
+    ) : DialogState
+
+    /** ノードの削除の確認。 */
+    data class ConfirmDelete(
+        val nodeId: Long,
+        val name: String,
+        val kind: NodeKind,
+    ) : DialogState
+}
+
+/** 入力した文字を何に使うか。 */
+sealed interface EditTarget {
+    /** 新しく作るグループの名前。 */
+    data object NewGroup : EditTarget
+
+    data class NodeName(val nodeId: Long) : EditTarget
+
+    data class FeedUrl(val channelId: Long) : EditTarget
 }
 
 data class MainUiState(

@@ -242,6 +242,56 @@ class LegirssStore(
         }
     }
 
+    /**
+     * グループを [parentId] の下の末尾に登録する。[parentId] が null なら最上位に置く。
+     *
+     * @return 登録したグループのノード ID。
+     */
+    suspend fun addGroup(parentId: Long?, name: String): Long = access {
+        database.transactionWithResult {
+            queries.insertNode(parentId, queries.selectNextPosition(parentId).executeAsOne(), NodeKind.GROUP.code, name)
+            queries.lastInsertRowId().executeAsOne()
+        }
+    }
+
+    suspend fun renameNode(nodeId: Long, name: String) = access {
+        queries.updateNodeName(name, nodeId)
+    }
+
+    /** ノードを削除する。グループなら配下のノードも、チャンネルなら記事も一緒に消える。 */
+    suspend fun deleteNode(nodeId: Long) = access {
+        queries.deleteNode(nodeId)
+    }
+
+    suspend fun setFeedUrl(channelId: Long, feedUrl: String) = access {
+        queries.updateFeedUrl(feedUrl, channelId)
+    }
+
+    /**
+     * ノードを [parentId] の下の、先頭から [index] 番目へ移す。[parentId] が null なら最上位へ移す。
+     *
+     * [index] は移すノードを除いた並びでの位置。範囲を外れていれば、先頭または末尾に置く。
+     */
+    suspend fun moveNode(nodeId: Long, parentId: Long?, index: Int) = access {
+        database.transaction {
+            val siblings = queries.selectChildren(parentId) { id, _ -> id }.executeAsList() - nodeId
+            val position = index.coerceIn(0, siblings.size)
+            placeInOrder(parentId, siblings.take(position) + nodeId + siblings.drop(position))
+        }
+    }
+
+    /** [parentId] の直下のノードを名前の順に並べ直す。大文字と小文字は区別しない。 */
+    suspend fun sortChildrenByName(parentId: Long?) = access {
+        database.transaction {
+            val children = queries.selectChildren(parentId) { id, name -> id to name }.executeAsList()
+            placeInOrder(parentId, children.sortedBy { (_, name) -> name.lowercase() }.map { (id, _) -> id })
+        }
+    }
+
+    private fun placeInOrder(parentId: Long?, nodeIds: List<Long>) {
+        nodeIds.forEachIndexed { position, nodeId -> queries.updateNodePlace(parentId, position.toLong(), nodeId) }
+    }
+
     /** チャンネルを購読中止にする、または購読を再開する。 */
     suspend fun setChannelsPaused(channelIds: Collection<Long>, paused: Boolean) = access {
         queries.setChannelsPaused(if (paused) 1L else 0L, channelIds)

@@ -136,4 +136,78 @@ class LegirssStoreTest {
         assertEquals(3, store.loadArticleRows(channelIds = null).size)
         assertEquals(listOf("b1"), store.loadArticleRows(listOf(beta.id)).map { it.title })
     }
+
+    /** [parentId] の直下のノードの名前を、並び順で返す。 */
+    private suspend fun LegirssStore.childNames(parentId: Long?): List<String> =
+        loadTree().filter { it.parentId == parentId }.sortedBy { it.position }.map { it.name }
+
+    private suspend fun LegirssStore.idOf(name: String): Long = loadTree().first { it.name == name }.id
+
+    /** 追加したグループとチャンネルは、指定した親の下の末尾に入る。 */
+    @Test
+    fun addsNodesAtEndOfParent() = runTest {
+        val store = newStore().apply { importNodes(nodes) }
+        val news = store.idOf("News")
+
+        store.addGroup(parentId = null, name = "Tech")
+        store.addChannel(parentId = news, name = "Gamma", feedUrl = "https://gamma.example/feed")
+
+        assertEquals(listOf("News", "Beta", "Tech"), store.childNames(parentId = null))
+        assertEquals(listOf("Alpha", "Gamma"), store.childNames(news))
+    }
+
+    /** グループを削除すると、配下のチャンネルとその記事も消える。ほかのノードは残る。 */
+    @Test
+    fun deletesGroupWithItsContent() = runTest {
+        val store = newStore().apply { importNodes(nodes) }
+
+        store.deleteNode(store.idOf("News"))
+
+        assertEquals(listOf("Beta"), store.loadTree().map { it.name })
+        assertEquals(listOf("b1"), store.loadArticleRows(channelIds = null).map { it.title })
+    }
+
+    /** 名前とフィードの URL を書き換えられる。 */
+    @Test
+    fun renamesNodeAndChangesFeedUrl() = runTest {
+        val store = newStore().apply { importNodes(nodes) }
+        val alpha = store.idOf("Alpha")
+
+        store.renameNode(alpha, "Alpha Daily")
+        store.setFeedUrl(alpha, "https://alpha.example/new")
+
+        val renamed = store.loadTree().first { it.id == alpha }
+        assertEquals("Alpha Daily", renamed.name)
+        assertEquals("https://alpha.example/new", renamed.channel?.feedUrl)
+    }
+
+    /** ノードを別の親の下の指定の位置へ移せる。同じ親の中での並べ替えもできる。 */
+    @Test
+    fun movesNodeToGivenPlace() = runTest {
+        val store = newStore().apply { importNodes(nodes) }
+        val news = store.idOf("News")
+        store.addChannel(parentId = news, name = "Gamma", feedUrl = "https://gamma.example/feed")
+
+        store.moveNode(store.idOf("Beta"), parentId = news, index = 1)
+        val afterMoveIntoGroup = store.childNames(news)
+        store.moveNode(store.idOf("Gamma"), parentId = news, index = 0)
+        val afterReorder = store.childNames(news)
+        store.moveNode(store.idOf("Alpha"), parentId = null, index = 0)
+
+        assertEquals(listOf("Alpha", "Beta", "Gamma"), afterMoveIntoGroup)
+        assertEquals(listOf("Gamma", "Alpha", "Beta"), afterReorder)
+        assertEquals(listOf("Alpha", "News"), store.childNames(parentId = null))
+        assertEquals(listOf("Gamma", "Beta"), store.childNames(news))
+    }
+
+    /** 直下のノードを、大文字と小文字を区別せずに名前の順へ並べ直す。 */
+    @Test
+    fun sortsChildrenByName() = runTest {
+        val store = newStore().apply { importNodes(nodes) }
+        store.addGroup(parentId = null, name = "alpha group")
+
+        store.sortChildrenByName(parentId = null)
+
+        assertEquals(listOf("alpha group", "Beta", "News"), store.childNames(parentId = null))
+    }
 }

@@ -21,6 +21,7 @@ import to.sava.legirss.html.HtmlBlocks
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
+import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
 import to.sava.legirss.update.FeedUpdater
 import to.sava.legirss.update.UpdateProgress
@@ -237,6 +238,72 @@ class MainViewModel(
             } finally {
                 updateAddChannelDialog { it.copy(busy = false) }
             }
+        }
+    }
+
+    override fun openAddGroup() {
+        mutableState.update { it.copy(dialog = DialogState.EditText(EditTarget.NewGroup, initialText = "")) }
+    }
+
+    override fun openRename(selection: NodeSelection) {
+        val node = tree.nodeOf(selection) ?: return
+        mutableState.update { it.copy(dialog = DialogState.EditText(EditTarget.NodeName(node.id), node.name)) }
+    }
+
+    override fun openChangeFeedUrl(selection: NodeSelection) {
+        val node = tree.nodeOf(selection) ?: return
+        val channel = node.channel ?: return
+        mutableState.update { it.copy(dialog = DialogState.EditText(EditTarget.FeedUrl(node.id), channel.feedUrl)) }
+    }
+
+    /** 入力の窓で決めた文字を、窓の目的に合わせて保存する。前後の空白を除いて空なら何もしない。 */
+    override fun submitText(text: String) {
+        val dialog = mutableState.value.dialog as? DialogState.EditText ?: return
+        val entered = text.trim().ifEmpty { return }
+        closeDialog()
+        scope.launch {
+            when (val target = dialog.target) {
+                EditTarget.NewGroup -> addGroup(entered)
+                is EditTarget.NodeName -> store.renameNode(target.nodeId, entered)
+                is EditTarget.FeedUrl -> store.setFeedUrl(target.channelId, entered)
+            }
+            reloadTree()
+        }
+    }
+
+    private suspend fun addGroup(name: String) {
+        val parentId = tree.parentForNewNode(mutableState.value.selectedNode)
+        store.addGroup(parentId, name)
+        expanded = expanded + NodeSelection.All + listOfNotNull(parentId?.let(NodeSelection::Node))
+    }
+
+    /** [selection] のノードを削除してよいかを尋ねる窓を出す。「全ての記事」に対しては何もしない。 */
+    override fun requestDelete(selection: NodeSelection) {
+        val node = tree.nodeOf(selection) ?: return
+        mutableState.update { it.copy(dialog = DialogState.ConfirmDelete(node.id, node.name, node.kind)) }
+    }
+
+    /** 確認の窓で尋ねていたノードを削除する。削除したノードの親を選び直す。 */
+    override fun confirmDelete() {
+        val dialog = mutableState.value.dialog as? DialogState.ConfirmDelete ?: return
+        val parent = tree.nodeOf(NodeSelection.Node(dialog.nodeId))?.parentId?.let(NodeSelection::Node) ?: NodeSelection.All
+        closeDialog()
+        scope.launch {
+            store.deleteNode(dialog.nodeId)
+            reloadTree()
+            showNode(parent)
+        }
+    }
+
+    /** [selection] の直下のノードを名前の順に並べ直す。チャンネルを指定されたら何もしない。 */
+    override fun sortChildrenByName(selection: NodeSelection) {
+        val parentId = when (selection) {
+            NodeSelection.All -> null
+            is NodeSelection.Node -> tree.nodeOf(selection)?.takeIf { it.kind == NodeKind.GROUP }?.id ?: return
+        }
+        scope.launch {
+            store.sortChildrenByName(parentId)
+            reloadTree()
         }
     }
 

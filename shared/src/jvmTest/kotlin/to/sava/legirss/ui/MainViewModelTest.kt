@@ -350,6 +350,55 @@ class MainViewModelTest {
         assertEquals(1, store.loadUpdateTargets(channelIds = null).size)
     }
 
+    private val MainViewModel.treeLabels get() = state.value.treeRows.map { it.label }
+
+    /** グループを追加し、名前を変えると、ツリーの表示に反映される。入力の前後の空白は除く。 */
+    @Test
+    fun addsAndRenamesGroup() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.openAddGroup()
+        viewModel.submitText("  News ")
+        val afterAdd = viewModel.treeLabels
+        viewModel.openRename(NodeSelection.Node(store.loadTree().single { it.name == "News" }.id))
+        val initialText = (viewModel.state.value.dialog as DialogState.EditText).initialText
+        viewModel.submitText("Daily")
+
+        assertEquals(listOf("全ての記事 (2/3)", "Example (2/3)", "News"), afterAdd)
+        assertEquals("News", initialText)
+        assertEquals(listOf("全ての記事 (2/3)", "Example (2/3)", "Daily"), viewModel.treeLabels)
+        assertNull(viewModel.state.value.dialog)
+    }
+
+    /** 削除は確認の窓を経て行い、確認するとノードと記事が消えて、親にあたるノードが選ばれる。 */
+    @Test
+    fun deletesNodeAfterConfirmation() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val channel = NodeSelection.Node(store.loadTree().single().id)
+        viewModel.selectNode(channel)
+
+        viewModel.requestDelete(channel)
+        val nodesWhileAsking = store.loadTree().size
+        viewModel.confirmDelete()
+
+        assertEquals(1, nodesWhileAsking)
+        assertEquals(listOf("全ての記事"), viewModel.treeLabels)
+        assertEquals(NodeSelection.All, viewModel.state.value.selectedNode)
+        assertEquals(emptyList(), viewModel.titles)
+    }
+
+    /** フィードの URL を変えると、次の更新は新しい URL から取得する。 */
+    @Test
+    fun changesFeedUrl() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val channel = NodeSelection.Node(store.loadTree().single().id)
+
+        viewModel.openChangeFeedUrl(channel)
+        viewModel.submitText("https://example.com/moved")
+
+        assertEquals("https://example.com/moved", store.loadUpdateTargets(channelIds = null).single().feedUrl)
+    }
+
     /** 更新すると新着が一覧に入り、結果がステータスに出る。一覧を並べ直すので選択は外れる。 */
     @Test
     fun reloadsAfterUpdate() = runTest(UnconfinedTestDispatcher()) {

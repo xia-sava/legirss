@@ -85,6 +85,23 @@ SELECT coalesce(max(position), -1) + 1 FROM node WHERE parent_id IS ?;
 setChannelsPaused:
 UPDATE channel SET paused = ?, gone_count = 0, gone_at = NULL WHERE node_id IN ?;
 
+updateNodeName:
+UPDATE node SET name = ? WHERE id = ?;
+
+-- 配下のノード、チャンネルの情報、記事は、外部キーの指定で一緒に消える。
+deleteNode:
+DELETE FROM node WHERE id = ?;
+
+-- 前の URL で得た条件付き取得の値は、新しい URL には使えないので消す。
+updateFeedUrl:
+UPDATE channel SET feed_url = ?, etag = NULL, last_modified = NULL WHERE node_id = ?;
+
+selectChildren:
+SELECT id, name FROM node WHERE parent_id IS ? ORDER BY position, id;
+
+updateNodePlace:
+UPDATE node SET parent_id = ?, position = ? WHERE id = ?;
+
 lastInsertRowId:
 SELECT last_insert_rowid();
 

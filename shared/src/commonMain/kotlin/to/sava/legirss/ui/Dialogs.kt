@@ -15,10 +15,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import to.sava.legirss.feed.FeedCandidate
+import to.sava.legirss.model.NodeKind
 import to.sava.legirss.ui.component.DialogButton
 import to.sava.legirss.ui.component.DialogButtons
 import to.sava.legirss.ui.component.DialogText
@@ -31,6 +38,16 @@ private const val ADD_CHANNEL_PROMPT = "フィードの URL か、フィード�
 private const val ADD_LABEL = "追加"
 private const val CHECKING_LABEL = "確認中…"
 private const val CANCEL_LABEL = "キャンセル"
+private const val OK_LABEL = "OK"
+
+private const val ADD_GROUP_TITLE = "グループの追加"
+private const val RENAME_TITLE = "名前の変更"
+private const val CHANGE_FEED_URL_TITLE = "フィードの URL の変更"
+
+private const val DELETE_TITLE = "削除"
+private const val DELETE_LABEL = "削除"
+private const val DELETE_GROUP_CONSEQUENCE = "中のグループとチャンネル、その記事も全て消えます。"
+private const val DELETE_CHANNEL_CONSEQUENCE = "このチャンネルの記事も全て消えます。"
 
 private val CANDIDATE_PADDING = 4.dp
 
@@ -39,6 +56,53 @@ private val CANDIDATE_PADDING = 4.dp
 fun DialogHost(dialog: DialogState, actions: MainActions) {
     when (dialog) {
         is DialogState.AddChannel -> AddChannelDialog(dialog, actions)
+        is DialogState.EditText -> EditTextDialog(dialog, actions)
+        is DialogState.ConfirmDelete -> ConfirmDeleteDialog(dialog, actions)
+    }
+}
+
+@Composable
+private fun EditTextDialog(dialog: DialogState.EditText, actions: MainActions) {
+    // 開いたときは全体を選んでおき、そのまま打てば置き換わるようにする。
+    var text by remember { mutableStateOf(TextFieldValue(dialog.initialText, TextRange(0, dialog.initialText.length))) }
+    val title = when (dialog.target) {
+        EditTarget.NewGroup -> ADD_GROUP_TITLE
+        is EditTarget.NodeName -> RENAME_TITLE
+        is EditTarget.FeedUrl -> CHANGE_FEED_URL_TITLE
+    }
+    ModalDialog(title, onDismiss = actions::closeDialog) {
+        TextInput(
+            value = text,
+            onValueChange = { text = it },
+            onSubmit = { actions.submitText(text.text) },
+            modifier = Modifier.fillMaxWidth(),
+            requestFocus = true,
+        )
+        DialogButtons {
+            DialogButton(OK_LABEL, onClick = { actions.submitText(text.text) })
+            DialogButton(CANCEL_LABEL, onClick = actions::closeDialog)
+        }
+    }
+}
+
+@Composable
+private fun ConfirmDeleteDialog(dialog: DialogState.ConfirmDelete, actions: MainActions) {
+    val consequence = when (dialog.kind) {
+        NodeKind.GROUP -> DELETE_GROUP_CONSEQUENCE
+        NodeKind.CHANNEL -> DELETE_CHANNEL_CONSEQUENCE
+    }
+    ModalDialog(
+        title = DELETE_TITLE,
+        onDismiss = actions::closeDialog,
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            (event.type == KeyEventType.KeyDown && event.key == Key.Enter).also { if (it) actions.confirmDelete() }
+        },
+    ) {
+        DialogText("「${dialog.name}」を削除します。$consequence")
+        DialogButtons {
+            DialogButton(DELETE_LABEL, onClick = actions::confirmDelete)
+            DialogButton(CANCEL_LABEL, onClick = actions::closeDialog)
+        }
     }
 }
 

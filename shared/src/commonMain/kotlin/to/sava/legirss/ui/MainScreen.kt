@@ -73,6 +73,11 @@ private const val UPDATE_NODE_LABEL = "更新"
 private const val PAUSE_LABEL = "購読中止"
 private const val RESUME_LABEL = "購読再開"
 private const val ADD_CHANNEL_MENU_LABEL = "チャンネルの追加…"
+private const val ADD_GROUP_MENU_LABEL = "グループの追加…"
+private const val RENAME_MENU_LABEL = "名前の変更…"
+private const val CHANGE_FEED_URL_MENU_LABEL = "フィードの URL の変更…"
+private const val DELETE_MENU_LABEL = "削除…"
+private const val SORT_BY_NAME_MENU_LABEL = "中を名前の順に並べ直す"
 
 /**
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
@@ -170,6 +175,18 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
     }
     add(null)
     add(MenuEntry(ADD_CHANNEL_MENU_LABEL, onClick = actions::openAddChannel))
+    add(MenuEntry(ADD_GROUP_MENU_LABEL, onClick = actions::openAddGroup))
+    val isChannel = row.icon != TreeIcon.ALL && row.icon != TreeIcon.GROUP
+    if (row.icon != TreeIcon.ALL) {
+        add(null)
+        add(MenuEntry(RENAME_MENU_LABEL) { actions.openRename(row.key) })
+        if (isChannel) add(MenuEntry(CHANGE_FEED_URL_MENU_LABEL) { actions.openChangeFeedUrl(row.key) })
+        add(MenuEntry(DELETE_MENU_LABEL) { actions.requestDelete(row.key) })
+    }
+    if (!isChannel) {
+        add(null)
+        add(MenuEntry(SORT_BY_NAME_MENU_LABEL) { actions.sortChildrenByName(row.key) })
+    }
 }
 
 @Composable
