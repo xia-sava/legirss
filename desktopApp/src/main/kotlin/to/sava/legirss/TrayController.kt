@@ -1,18 +1,24 @@
 package to.sava.legirss
 
 import java.awt.BasicStroke
-import java.awt.CheckboxMenuItem
 import java.awt.Color
-import java.awt.Image
-import java.awt.MenuItem
-import java.awt.PopupMenu
+import java.awt.MouseInfo
 import java.awt.RenderingHints
 import java.awt.SystemTray
 import java.awt.TrayIcon
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.awt.geom.Arc2D
 import java.awt.image.BufferedImage
+import javax.swing.BorderFactory
+import javax.swing.JCheckBoxMenuItem
+import javax.swing.JDialog
+import javax.swing.JMenuItem
+import javax.swing.JPopupMenu
+import javax.swing.event.PopupMenuEvent
+import javax.swing.event.PopupMenuListener
 
 enum class TrayState {
     NORMAL,
@@ -40,11 +46,15 @@ class TrayController(
     /** アイコンをタスクトレイに出す。タスクトレイを使えない環境では何もしない。 */
     fun install() {
         if (!SystemTray.isSupported()) return
-        trayIcon = TrayIcon(icons.getValue(TrayState.NORMAL), APP_TITLE, createMenu()).apply {
+        trayIcon = TrayIcon(icons.getValue(TrayState.NORMAL), APP_TITLE).apply {
             isImageAutoSize = true
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(event: MouseEvent) {
                     if (event.button == MouseEvent.BUTTON1) onToggleWindow()
+                }
+
+                override fun mouseReleased(event: MouseEvent) {
+                    if (event.isPopupTrigger) showMenu()
                 }
             })
         }.also(SystemTray.getSystemTray()::add)
@@ -62,24 +72,63 @@ class TrayController(
         trayIcon = null
     }
 
-    private fun createMenu(): PopupMenu = PopupMenu().apply {
-        add(MenuItem(SHOW_LABEL).apply { addActionListener { onShowWindow() } })
-        add(MenuItem(UPDATE_LABEL).apply { addActionListener { onUpdate() } })
+    /**
+     * マウスポインタの位置にメニューを出す。
+     *
+     * タスクトレイのアイコンは Swing の部品ではないので、見えない小さなウィンドウを足場にして出し、
+     * その足場からフォーカスが外れたらメニューを閉じる。
+     */
+    private fun showMenu() {
+        val pointer = MouseInfo.getPointerInfo()?.location ?: return
+        val anchor = JDialog().apply {
+            isUndecorated = true
+            isAlwaysOnTop = true
+            setSize(1, 1)
+        }
+        val menu = createMenu()
+        menu.addPopupMenuListener(object : PopupMenuListener {
+            override fun popupMenuWillBecomeVisible(event: PopupMenuEvent) = Unit
+
+            override fun popupMenuWillBecomeInvisible(event: PopupMenuEvent) = anchor.dispose()
+
+            override fun popupMenuCanceled(event: PopupMenuEvent) = anchor.dispose()
+        })
+        anchor.addWindowFocusListener(object : WindowAdapter() {
+            override fun windowLostFocus(event: WindowEvent) {
+                menu.isVisible = false
+            }
+        })
+        // タスクトレイは画面の端にあるので、メニューはポインタの左上へ開く。
+        val size = menu.preferredSize
+        anchor.setLocation(pointer.x, pointer.y)
+        anchor.isVisible = true
+        menu.show(anchor, -size.width, -size.height)
+    }
+
+    internal fun createMenu(): JPopupMenu = JPopupMenu().apply {
+        add(menuItem(JMenuItem(SHOW_LABEL)) { onShowWindow() })
+        add(menuItem(JMenuItem(UPDATE_LABEL)) { onUpdate() })
         addSeparator()
         add(createStartupItem())
         addSeparator()
-        add(MenuItem(EXIT_LABEL).apply { addActionListener { onExit() } })
+        add(menuItem(JMenuItem(EXIT_LABEL)) { onExit() })
     }
 
-    private fun createStartupItem(): CheckboxMenuItem =
-        CheckboxMenuItem(STARTUP_LABEL, startup.isAvailable && startup.isRegistered()).apply {
-            isEnabled = startup.isAvailable
-            addItemListener {
-                val succeeded = if (state) startup.register() else startup.unregister()
-                // 失敗したら、チェックの表示を実際の登録の状態に合わせ直す。
-                if (!succeeded) state = startup.isRegistered()
-            }
+    private fun createStartupItem(): JMenuItem {
+        val item = JCheckBoxMenuItem(STARTUP_LABEL, startup.isAvailable && startup.isRegistered())
+        item.isEnabled = startup.isAvailable
+        return menuItem(item) {
+            val succeeded = if (item.isSelected) startup.register() else startup.unregister()
+            // 失敗したら、チェックの表示を実際の登録の状態に合わせ直す。
+            if (!succeeded) item.isSelected = startup.isRegistered()
         }
+    }
+
+    /** 項目の上下左右に余白を足し、選ばれたときの動作を付ける。 */
+    private fun <T : JMenuItem> menuItem(item: T, onSelect: () -> Unit): T = item.apply {
+        border = BorderFactory.createCompoundBorder(border, MENU_ITEM_PADDING)
+        addActionListener { onSelect() }
+    }
 
     companion object {
         private const val APP_TITLE = "legirss"
@@ -87,6 +136,8 @@ class TrayController(
         private const val UPDATE_LABEL = "更新"
         private const val STARTUP_LABEL = "Windows の起動時に開始する"
         private const val EXIT_LABEL = "終了"
+
+        private val MENU_ITEM_PADDING = BorderFactory.createEmptyBorder(4, 6, 4, 14)
 
         private const val ICON_SIZE = 32
         private val NORMAL_COLOR = Color(0xF0, 0x8A, 0x24)

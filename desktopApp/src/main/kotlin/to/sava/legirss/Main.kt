@@ -40,6 +40,8 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
+import javax.swing.UnsupportedLookAndFeelException
 
 private const val APP_NAME = "legirss"
 private const val UI_FONT_NAME = "Yu Gothic UI"
@@ -49,6 +51,7 @@ private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main(args: Array<String>) {
     val dataDir = dataDir()
+    useSystemLookAndFeel()
 
     // ウィンドウを出しているか。すでに起動しているところへもう一度起動されたときにも true にする。
     var windowVisible by mutableStateOf(StartupRegistration.START_IN_TRAY_OPTION !in args)
@@ -136,6 +139,17 @@ private fun trayStateOf(state: MainUiState): TrayState = when {
     state.updateProgress != null -> TrayState.UPDATING
     state.unseenNewArticles -> TrayState.NEW_ARTICLES
     else -> TrayState.NORMAL
+}
+
+/** Swing で出す部品（タスクトレイのメニュー）を、OS の見た目に合わせる。 */
+internal fun useSystemLookAndFeel() {
+    try {
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
+    } catch (exception: ReflectiveOperationException) {
+        System.err.println("OS の見た目を適用できません: ${exception.message}")
+    } catch (exception: UnsupportedLookAndFeelException) {
+        System.err.println("OS の見た目を適用できません: ${exception.message}")
+    }
 }
 
 /** Windows の UI 用フォントを名前で引く。 */
