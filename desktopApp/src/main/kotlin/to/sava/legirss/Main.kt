@@ -24,6 +24,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import to.sava.legirss.data.DatabaseBackup
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedHttp
@@ -39,6 +41,8 @@ import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
+import java.sql.SQLException
+import java.time.LocalDate
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import javax.swing.UnsupportedLookAndFeelException
@@ -47,6 +51,7 @@ private const val APP_NAME = "legirss"
 private const val UI_FONT_NAME = "Yu Gothic UI"
 private const val DATA_DIR_PROPERTY = "legirss.dataDir"
 private const val AUTOMATIC_UPDATE_INTERVAL_MILLIS = 60 * 60 * 1000L
+private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
 private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main(args: Array<String>) {
@@ -64,6 +69,7 @@ fun main(args: Array<String>) {
         parseDispatcher = Dispatchers.Default,
         now = System::currentTimeMillis,
     )
+    val backup = DatabaseBackup(dataDir, store, LocalDate::now)
     val style = LegirssStyle(fontFamily = uiFontFamily())
 
     application {
@@ -98,6 +104,7 @@ fun main(args: Array<String>) {
 
         LaunchedEffect(windowVisible) { viewModel.setWindowVisible(windowVisible) }
         LaunchedEffect(Unit) { viewModel.runAutomaticUpdates(AUTOMATIC_UPDATE_INTERVAL_MILLIS) }
+        LaunchedEffect(Unit) { runDailyBackups(backup) }
 
         // 最小化はタスクトレイへしまう操作として扱う。
         LaunchedEffect(windowState.isMinimized) {
@@ -139,6 +146,24 @@ private fun trayStateOf(state: MainUiState): TrayState = when {
     state.updateProgress != null -> TrayState.UPDATING
     state.totalCount.unread > 0 -> TrayState.UNREAD
     else -> TrayState.NORMAL
+}
+
+/**
+ * その日のバックアップがまだ無ければ作ることを、[BACKUP_CHECK_INTERVAL_MILLIS] ごとに繰り返す。
+ *
+ * 呼び出したコルーチンが取り消されるまで戻らない。作れなかった場合は、次の機会にもう一度試みる。
+ */
+private suspend fun runDailyBackups(backup: DatabaseBackup): Nothing {
+    while (true) {
+        try {
+            backup.backUpIfDue()
+        } catch (exception: IOException) {
+            System.err.println("バックアップを作れません: ${exception.message}")
+        } catch (exception: SQLException) {
+            System.err.println("バックアップを作れません: ${exception.message}")
+        }
+        delay(BACKUP_CHECK_INTERVAL_MILLIS)
+    }
 }
 
 /** Swing で出す部品（タスクトレイのメニュー）を、OS の見た目に合わせる。 */

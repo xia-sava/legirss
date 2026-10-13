@@ -13,8 +13,11 @@ object DatabaseFactory {
     /** [dataDir] の下のデータベースを開く。無ければ作る。 */
     fun open(dataDir: Path): LegirssDatabase {
         Files.createDirectories(dataDir)
-        return open("jdbc:sqlite:${dataDir.resolve(DATABASE_FILE_NAME)}")
+        return open(urlOf(dataDir))
     }
+
+    /** [dataDir] の下のデータベースへ接続するための JDBC の URL。 */
+    internal fun urlOf(dataDir: Path): String = "jdbc:sqlite:${dataDir.resolve(DATABASE_FILE_NAME)}"
 
     fun openInMemory(): LegirssDatabase = open(JdbcSqliteDriver.IN_MEMORY)
 

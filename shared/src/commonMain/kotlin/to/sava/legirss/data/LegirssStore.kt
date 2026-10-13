@@ -37,6 +37,9 @@ class LegirssStore(
     private suspend fun <T> access(block: () -> T): T =
         withContext(context = ioDispatcher) { accessLock.withLock { block() } }
 
+    /** ほかの読み書きが割り込まない状態で [block] を実行する。データベースのファイルを丸ごと扱う処理に使う。 */
+    suspend fun <T> withExclusiveAccess(block: () -> T): T = access(block)
+
     suspend fun isEmpty(): Boolean = access {
         queries.countNodes().executeAsOne() == 0L
     }
