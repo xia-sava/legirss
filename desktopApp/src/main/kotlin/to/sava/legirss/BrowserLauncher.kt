@@ -60,7 +60,8 @@ internal class BrowserLauncher {
         val wasAlwaysOnTop = window.isAlwaysOnTop
         window.isAlwaysOnTop = true
         window.toFront()
-        window.requestFocus()
+        // キーを受け取るのはウィンドウの中の部品なので、フォーカスはウィンドウ自身ではなく、直前に持っていた部品へ戻す。
+        window.mostRecentFocusOwner?.requestFocus()
         window.isAlwaysOnTop = wasAlwaysOnTop
     }
 
