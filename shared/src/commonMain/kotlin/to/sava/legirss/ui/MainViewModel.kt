@@ -598,13 +598,14 @@ class MainViewModel(
 
     private fun MainUiState.withoutMarks(): MainUiState = copy(markedArticleIds = emptySet(), markRangeEndIndex = null)
 
-    /** 一覧を作り直す。行の並びが変わるので選択と印は外す。 */
+    /** 一覧を作り直す。行の並びが変わるので選択と印は外し、表示は先頭へ戻す。 */
     private fun MainUiState.withArrangedArticles(): MainUiState {
         contentJob?.cancel()
         return copy(
             articles = arrangeArticles(loadedArticles, filter, sort, channelNames),
             selectedArticleIndex = null,
             articleContent = null,
+            listArrangement = listArrangement + 1,
         ).withoutMarks()
     }
 

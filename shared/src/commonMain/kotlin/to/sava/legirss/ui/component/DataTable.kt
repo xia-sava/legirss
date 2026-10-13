@@ -101,6 +101,7 @@ enum class RowSelectMode {
  * @param isMarked 印を付けた行か。印を付けた行は、選んでいる行と同じ色で示す。
  * @param onSelectAll 全ての行に印を付ける操作（Ctrl+A）をした。
  * @param onContextMenu 行を右クリックしたときに、その行と、押した位置（この一覧の左上からの距離）を伝える。
+ * @param scrollResetKey 値が変わるたびに、表示を先頭の行へ戻す。
  * @param sortedColumn 並べ替えの印を出す列。
  * @param centerSelection キー操作で選択を動かしたとき、選択行を表示範囲の中央付近へ寄せる。
  * @param focusRequester この一覧にフォーカスを移すためのもの。
@@ -116,6 +117,7 @@ fun <C, R> DataTable(
     onSelectIndex: (Int, RowSelectMode) -> Unit,
     onSelectAll: () -> Unit,
     onContextMenu: (Int, IntOffset) -> Unit,
+    scrollResetKey: Any?,
     sortedColumn: C?,
     sortDescending: Boolean,
     onColumnClick: (C) -> Unit,
@@ -135,6 +137,11 @@ fun <C, R> DataTable(
     val headerHeightPx = with(density) { style.headerHeight.roundToPx() }
     val currentRowCount by rememberUpdatedState(rows.size)
     val currentOnContextMenu by rememberUpdatedState(onContextMenu)
+
+    // 一覧がまだ配置されていない最初の合成では、表示は先頭にあるので何もしない。
+    LaunchedEffect(scrollResetKey) {
+        if (listState.layoutInfo.visibleItemsInfo.isNotEmpty()) listState.scrollToItem(0)
+    }
 
     // キー操作以外で選択が表示範囲の外へ移ったときも、選択行が見えるようにする。
     LaunchedEffect(cursorIndex) {

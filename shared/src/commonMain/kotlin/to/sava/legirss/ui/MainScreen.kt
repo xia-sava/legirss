@@ -394,6 +394,7 @@ private fun ArticleDataTable(
         },
         onSelectAll = actions::markAllArticles,
         onContextMenu = onContextMenu,
+        scrollResetKey = state.listArrangement,
         sortedColumn = state.sort.column,
         sortDescending = state.sort.descending,
         onColumnClick = actions::sortBy,

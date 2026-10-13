@@ -322,6 +322,21 @@ class MainViewModelTest {
         assertEquals(listOf("https://example.com/newer"), copiedTexts)
     }
 
+    /** 一覧を並べ直す操作（ノードの選択など）は表示を先頭へ戻す合図を出し、記事を選ぶだけの操作は出さない。 */
+    @Test
+    fun signalsListResetOnlyWhenRearranged() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val initial = viewModel.state.value.listArrangement
+
+        viewModel.selectArticle(0)
+        viewModel.toggleSelectedState()
+        val afterReading = viewModel.state.value.listArrangement
+        viewModel.selectNode(NodeSelection.Node(store.loadTree().single().id))
+
+        assertEquals(initial, afterReading)
+        assertEquals(initial + 1, viewModel.state.value.listArrangement)
+    }
+
     /** 絞り込みを切り替えると、その状況の記事だけが並ぶ。 */
     @Test
     fun cyclesFilter() = runTest(UnconfinedTestDispatcher()) {
