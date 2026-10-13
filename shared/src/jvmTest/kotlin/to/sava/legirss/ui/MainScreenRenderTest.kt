@@ -71,7 +71,7 @@ internal object MainScreenRenderer {
     fun render(state: MainUiState): Image =
         ImageComposeScene(WIDTH, HEIGHT, Density(1f)) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(state, NoActions, rememberScrollState())
+                MainScreen(state, NoActions, rememberScrollState(), ScreenLayout(), onLayoutChange = {})
             }
         }.use { scene ->
             // 遅延リストの中身は 2 回目の描画で確定する。

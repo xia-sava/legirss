@@ -20,12 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -54,16 +49,6 @@ import to.sava.legirss.ui.theme.LegirssColors
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import to.sava.legirss.update.UpdateProgress
 
-private val DEFAULT_TREE_WIDTH = 240.dp
-private val DEFAULT_LIST_HEIGHT = 260.dp
-private val DEFAULT_COLUMN_WIDTHS = mapOf(
-    ArticleColumn.STATE to 22.dp,
-    ArticleColumn.DATE to 84.dp,
-    ArticleColumn.TITLE to 460.dp,
-    ArticleColumn.CHANNEL to 160.dp,
-    ArticleColumn.CATEGORY to 110.dp,
-    ArticleColumn.AUTHOR to 110.dp,
-)
 private val BAR_PADDING = 4.dp
 private val TOOLBAR_GROUP_GAP = 8.dp
 private val STATE_ICON_SIZE = 9.dp
@@ -77,24 +62,24 @@ private const val CANCEL_UPDATE_LABEL = "中止"
 
 /**
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
+ * @param layout 境目の位置と列の幅。
+ * @param onLayoutChange 利用者が境目や列の幅を動かしたときに、動かした後の値を伝える。
  */
 @Composable
-fun MainScreen(viewModel: MainViewModel, articleScroll: ScrollState, modifier: Modifier = Modifier) {
-    val state by viewModel.state.collectAsState()
-    MainScreen(state, viewModel, articleScroll, modifier)
-}
-
-@Composable
-fun MainScreen(state: MainUiState, actions: MainActions, articleScroll: ScrollState, modifier: Modifier = Modifier) {
+fun MainScreen(
+    state: MainUiState,
+    actions: MainActions,
+    articleScroll: ScrollState,
+    layout: ScreenLayout,
+    onLayoutChange: (ScreenLayout) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val style = LocalLegirssStyle.current
-    var treeWidth by remember { mutableStateOf(DEFAULT_TREE_WIDTH) }
-    var listHeight by remember { mutableStateOf(DEFAULT_LIST_HEIGHT) }
-    val columnWidths = remember { mutableStateMapOf<ArticleColumn, Dp>().apply { putAll(DEFAULT_COLUMN_WIDTHS) } }
     Column(modifier.fillMaxSize().background(style.colors.panel)) {
         Toolbar(state, actions)
         HorizontalSplit(
-            firstWidth = treeWidth,
-            onFirstWidthChange = { treeWidth = it },
+            firstWidth = layout.treeWidth,
+            onFirstWidthChange = { onLayoutChange(layout.copy(treeWidth = it)) },
             modifier = Modifier.weight(1f).fillMaxWidth(),
             first = {
                 TreeView(
@@ -107,15 +92,15 @@ fun MainScreen(state: MainUiState, actions: MainActions, articleScroll: ScrollSt
             },
             second = {
                 VerticalSplit(
-                    firstHeight = listHeight,
-                    onFirstHeightChange = { listHeight = it },
+                    firstHeight = layout.listHeight,
+                    onFirstHeightChange = { onLayoutChange(layout.copy(listHeight = it)) },
                     modifier = Modifier.fillMaxSize(),
                     first = {
                         ArticleTable(
                             state = state,
                             actions = actions,
-                            columnWidths = columnWidths,
-                            onColumnResize = { column, width -> columnWidths[column] = width },
+                            columnWidths = layout.columnWidths,
+                            onColumnResize = { column, width -> onLayoutChange(layout.withColumnWidth(column, width)) },
                         )
                     },
                     second = { ArticlePane(state, actions, articleScroll) },

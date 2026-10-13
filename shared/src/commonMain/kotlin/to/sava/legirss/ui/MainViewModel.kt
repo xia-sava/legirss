@@ -179,6 +179,11 @@ class MainViewModel(
         scope.launch { reload() }
     }
 
+    /** 画面の配置などの設定を保存する。[settings] に無い名前の設定は変えない。 */
+    fun saveSettings(settings: Map<String, String>) {
+        scope.launch { store.saveSettings(settings) }
+    }
+
     /**
      * 定期更新として全てのチャンネルを更新する。すでに更新が動いていれば、新しくは始めずにそれを返す。
      *

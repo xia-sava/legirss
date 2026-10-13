@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -20,11 +21,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.runBlocking
 import to.sava.legirss.data.DatabaseBackup
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
@@ -32,11 +40,14 @@ import to.sava.legirss.feed.FeedHttp
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
+import to.sava.legirss.ui.ScreenLayout
 import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import to.sava.legirss.update.FeedUpdater
 import java.awt.Desktop
+import java.awt.GraphicsEnvironment
+import java.awt.Rectangle
 import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
@@ -46,12 +57,14 @@ import java.time.LocalDate
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import javax.swing.UnsupportedLookAndFeelException
+import kotlin.math.roundToInt
 
 private const val APP_NAME = "legirss"
 private const val UI_FONT_NAME = "Yu Gothic UI"
 private const val DATA_DIR_PROPERTY = "legirss.dataDir"
 private const val AUTOMATIC_UPDATE_INTERVAL_MILLIS = 60 * 60 * 1000L
 private const val BACKUP_CHECK_INTERVAL_MILLIS = 60 * 60 * 1000L
+private const val LAYOUT_SAVE_DELAY_MILLIS = 500L
 private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main(args: Array<String>) {
@@ -75,6 +88,10 @@ fun main(args: Array<String>) {
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
     val style = LegirssStyle(fontFamily = uiFontFamily())
+    // 最初の描画から保存した配置で出すため、設定は画面を組み立てる前に読み終える。
+    val settings = runBlocking { store.loadSettings() }
+    val savedBounds = WindowBounds.fromSettings(settings)?.takeIf { it.isReachableOn(screenBounds()) }
+    val savedMaximized = settings[WindowBounds.MAXIMIZED_KEY] == WindowBounds.MAXIMIZED_ON
 
     application {
         val scope = rememberCoroutineScope()
@@ -91,7 +108,22 @@ fun main(args: Array<String>) {
             ).also(MainViewModel::load)
         }
         val state by viewModel.state.collectAsState()
-        val windowState = rememberWindowState(size = DEFAULT_WINDOW_SIZE)
+        val windowState = rememberWindowState(
+            placement = if (savedMaximized) WindowPlacement.Maximized else WindowPlacement.Floating,
+            position = savedBounds?.let { WindowPosition(it.x.dp, it.y.dp) } ?: WindowPosition.PlatformDefault,
+            size = savedBounds?.let { DpSize(it.width.dp, it.height.dp) } ?: DEFAULT_WINDOW_SIZE,
+        )
+        var layout by remember { mutableStateOf(ScreenLayout.fromSettings(settings)) }
+
+        // 動かしている最中は保存せず、動きが止まってから保存する。
+        LaunchedEffect(Unit) {
+            snapshotFlow { layout.toSettings() + windowSettingsOf(windowState) }
+                .drop(1)
+                .collectLatest { changed ->
+                    delay(LAYOUT_SAVE_DELAY_MILLIS)
+                    viewModel.saveSettings(changed)
+                }
+        }
 
         val tray = remember {
             TrayController(
@@ -141,7 +173,7 @@ fun main(args: Array<String>) {
                 }
             }
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(state, viewModel, articleScroll)
+                MainScreen(state, viewModel, articleScroll, layout, onLayoutChange = { layout = it })
             }
         }
     }
@@ -151,6 +183,31 @@ private fun trayStateOf(state: MainUiState): TrayState = when {
     state.updateProgress != null -> TrayState.UPDATING
     state.totalCount.unread > 0 -> TrayState.UNREAD
     else -> TrayState.NORMAL
+}
+
+/** つながっている全ての画面の範囲。 */
+private fun screenBounds(): List<Rectangle> =
+    GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.map { it.defaultConfiguration.bounds }
+
+/**
+ * ウィンドウの配置のうち、保存する設定。
+ *
+ * 位置と大きさは最大化していないときのものだけを保存し、最大化を解いたときに戻る先を残す。
+ * 最小化している間の位置は画面の外を指すので、何も保存しない。
+ */
+private fun windowSettingsOf(state: WindowState): Map<String, String> {
+    val position = state.position
+    return when {
+        state.isMinimized -> emptyMap()
+        state.placement != WindowPlacement.Floating -> mapOf(WindowBounds.MAXIMIZED_KEY to WindowBounds.MAXIMIZED_ON)
+        position !is WindowPosition.Absolute || !state.size.isSpecified -> emptyMap()
+        else -> WindowBounds(
+            x = position.x.value.roundToInt(),
+            y = position.y.value.roundToInt(),
+            width = state.size.width.value.roundToInt(),
+            height = state.size.height.value.roundToInt(),
+        ).toSettings() + (WindowBounds.MAXIMIZED_KEY to WindowBounds.MAXIMIZED_OFF)
+    }
 }
 
 /**

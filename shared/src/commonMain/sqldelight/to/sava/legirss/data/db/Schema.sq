@@ -97,6 +97,9 @@ WHERE channel_id IN ?;
 selectSetting:
 SELECT value FROM setting WHERE key = ?;
 
+selectSettings:
+SELECT key, value FROM setting;
+
 upsertSetting:
 INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?);
 

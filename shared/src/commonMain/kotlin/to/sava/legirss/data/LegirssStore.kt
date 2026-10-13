@@ -89,6 +89,16 @@ class LegirssStore(
         queries.upsertSetting(key, value)
     }
 
+    /** 保存されている全ての設定を、名前と値の組で返す。 */
+    suspend fun loadSettings(): Map<String, String> = access {
+        queries.selectSettings { key, value -> key to value }.executeAsList().toMap()
+    }
+
+    /** [settings] の設定をまとめて保存する。ここに無い名前の設定は変えない。 */
+    suspend fun saveSettings(settings: Map<String, String>) = access {
+        database.transaction { settings.forEach { (key, value) -> queries.upsertSetting(key, value) } }
+    }
+
     /** 記事の要約と本文を読み出す。記事が無ければ null。 */
     suspend fun loadArticleBody(articleId: Long): ArticleBody? = access {
         queries.selectArticleBody(articleId) { summary, content, link -> ArticleBody(summary, content, link) }
