@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 既定では GITHUB_TOKEN に何の権限も与えない。必要なジョブが必要な分だけ宣言する。
+permissions: {}
+
+# 同じ参照への連続 push では最新のものだけ検証する。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "25"
+
+jobs:
+  check:
+    # 画面の文字は Windows のフォントで描くため、テストも Windows で走らせる。
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # リポジトリに置いている gradle-wrapper.jar が公式のものであることを確かめる。
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run tests
+        run: ./gradlew check --console=plain
