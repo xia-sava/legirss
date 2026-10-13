@@ -5,6 +5,8 @@ import java.awt.Window
 import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
+import java.util.concurrent.Executors
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 /**
@@ -15,21 +17,32 @@ import javax.swing.Timer
  */
 internal class BrowserLauncher {
     /** 手前に保つウィンドウ。null の間は、開いたあとに何もしない。 */
+    @Volatile
     var ownerWindow: Window? = null
 
-    /** [url] を開く。開けなかった場合は理由を記録する。 */
+    // ブラウザを開く呼び出しは返るまでに数秒かかることがあるので、画面のスレッドでは行わない。
+    // 続けて開いた URL が、頼んだ順に開くよう、1 本のスレッドで順に処理する。
+    private val opener = Executors.newSingleThreadExecutor { task -> Thread(task, "browser-launcher").apply { isDaemon = true } }
+
+    /** [url] を開く。すぐに戻り、開く処理は裏で進む。開けなかった場合は理由を記録する。 */
     fun open(url: String) {
+        opener.execute {
+            if (browse(url)) SwingUtilities.invokeLater { ownerWindow?.takeIf { it.isVisible }?.let(::bringBackWhenCovered) }
+        }
+    }
+
+    /** @return 開けたら true。 */
+    private fun browse(url: String): Boolean =
         try {
             Desktop.getDesktop().browse(URI(url))
+            true
         } catch (exception: URISyntaxException) {
             AppLog.warn("URL として扱えません: $url", exception)
-            return
+            false
         } catch (exception: IOException) {
             AppLog.warn("ブラウザで開けません: $url", exception)
-            return
+            false
         }
-        ownerWindow?.takeIf { it.isVisible }?.let(::bringBackWhenCovered)
-    }
 
     /** [window] が手前でなくなるのを待って、手前へ戻す。一定の時間のうちに変わらなければ何もしない。 */
     private fun bringBackWhenCovered(window: Window) {
