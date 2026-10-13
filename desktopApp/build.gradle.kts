@@ -28,7 +28,7 @@ tasks.test {
 val appPackageName = "legirss"
 
 // 版数は配布物を作るときに -Plegirss.version で渡す。渡さなければ既定値を使う。
-val appVersion = providers.gradleProperty("legirss.version").getOrElse("1.0.0")
+val appVersion = providers.gradleProperty("legirss.version").getOrElse("0.1.0")
 
 compose.desktop {
     application {
