@@ -132,7 +132,7 @@ data class MainUiState(
     val statusMessage: String? = null,
     /** 値が変わるたびに、記事の一覧へフォーカスを移す。 */
     val listFocusRequest: Int = 0,
-    /** 一覧を並べ直すたびに変わる値。変わったら、一覧の表示を先頭へ戻す。 */
+    /** 一覧を並べ直すたびに変わる値。変わったら、一覧の表示を、読み始める記事が見える位置へ移す。 */
     val listArrangement: Int = 0,
     /** 手前に出しているダイアログ。出していなければ null。 */
     val dialog: DialogState? = null,

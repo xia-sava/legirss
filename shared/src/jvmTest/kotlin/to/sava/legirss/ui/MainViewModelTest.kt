@@ -322,7 +322,7 @@ class MainViewModelTest {
         assertEquals(listOf("https://example.com/newer"), copiedTexts)
     }
 
-    /** 一覧を並べ直す操作（ノードの選択など）は表示を先頭へ戻す合図を出し、記事を選ぶだけの操作は出さない。 */
+    /** 一覧を並べ直す操作（ノードの選択など）は表示を移す合図を出し、記事を選ぶだけの操作は出さない。 */
     @Test
     fun signalsListResetOnlyWhenRearranged() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()

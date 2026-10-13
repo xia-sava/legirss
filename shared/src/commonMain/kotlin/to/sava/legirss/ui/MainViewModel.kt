@@ -598,7 +598,7 @@ class MainViewModel(
 
     private fun MainUiState.withoutMarks(): MainUiState = copy(markedArticleIds = emptySet(), markRangeEndIndex = null)
 
-    /** 一覧を作り直す。行の並びが変わるので選択と印は外し、表示は先頭へ戻す。 */
+    /** 一覧を作り直す。行の並びが変わるので選択と印は外し、表示を移す合図を出す。 */
     private fun MainUiState.withArrangedArticles(): MainUiState {
         contentJob?.cancel()
         return copy(
