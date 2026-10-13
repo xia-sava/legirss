@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.TreeDropPlace
+import to.sava.legirss.ui.component.isEnterKey
 
 /** メイン画面から呼ぶ操作。 */
 interface MainActions {
@@ -117,7 +118,7 @@ fun MainActions.handleKey(
             else -> readOn()
         }
         event.key == Key.Spacebar && event.isShiftPressed -> scope.launch { articleScroll.pageUp() }
-        event.key == Key.Enter && plain -> openSelectedArticle()
+        event.isEnterKey && plain -> openSelectedArticle()
         (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) && plain -> toggleSelectedState()
         event.key == Key.Delete && plain -> deleteSelectedArticles()
         event.key == Key.L && event.isCtrlPressed -> copySelected(CopyContent.URL)

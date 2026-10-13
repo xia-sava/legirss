@@ -187,7 +187,7 @@ fun TextInput(
             .padding(horizontal = INPUT_HORIZONTAL_PADDING, vertical = INPUT_VERTICAL_PADDING)
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
-                (event.type == KeyEventType.KeyDown && event.key == Key.Enter).also { if (it) onSubmit() }
+                (event.type == KeyEventType.KeyDown && event.isEnterKey).also { if (it) onSubmit() }
             },
     )
 }

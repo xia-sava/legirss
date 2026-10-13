@@ -20,9 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
@@ -39,6 +37,7 @@ import to.sava.legirss.ui.component.DialogButtons
 import to.sava.legirss.ui.component.DialogText
 import to.sava.legirss.ui.component.ModalDialog
 import to.sava.legirss.ui.component.TextInput
+import to.sava.legirss.ui.component.isEnterKey
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 
 private const val ADD_CHANNEL_TITLE = "チャンネルの追加"
@@ -192,7 +191,7 @@ private fun ConfirmDeleteDialog(dialog: DialogState.ConfirmDelete, actions: Main
         title = DELETE_TITLE,
         onDismiss = actions::closeDialog,
         modifier = Modifier.onPreviewKeyEvent { event ->
-            (event.type == KeyEventType.KeyDown && event.key == Key.Enter).also { if (it) actions.confirmDelete() }
+            (event.type == KeyEventType.KeyDown && event.isEnterKey).also { if (it) actions.confirmDelete() }
         },
     ) {
         DialogText("「${dialog.name}」を削除します。$consequence")
