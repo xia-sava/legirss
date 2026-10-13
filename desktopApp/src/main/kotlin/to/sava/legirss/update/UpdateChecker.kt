@@ -20,9 +20,9 @@ internal sealed interface UpdateCheck {
 }
 
 /**
- * 配布中の版の知らせを取得して、動いている版より新しいかを確かめる。
+ * 配布中の版のマニフェストを取得して、動いている版より新しいかを確かめる。
  *
- * 知らせは、署名を確かめてからでないと読まない。署名が取れない、合わない場合はどれも失敗にする。
+ * マニフェストは、署名を確かめてからでないと読まない。署名が取れない、合わない場合はどれも失敗にする。
  *
  * @param fetch URL の中身を取得する。取得できなければ null を返す。
  */
@@ -42,8 +42,8 @@ internal class UpdateChecker(
     }
 
     private companion object {
-        const val FETCH_FAILED = "配布中の版の知らせを取得できません"
-        const val SIGNATURE_UNVERIFIED = "配布中の版の知らせの署名を確かめられません"
-        const val UNREADABLE = "配布中の版の知らせを読めません"
+        const val FETCH_FAILED = "配布中の版のマニフェストを取得できません"
+        const val SIGNATURE_UNVERIFIED = "配布中の版のマニフェストの署名を確かめられません"
+        const val UNREADABLE = "配布中の版のマニフェストを読めません"
     }
 }

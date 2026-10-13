@@ -11,7 +11,7 @@ import java.net.http.HttpResponse
 import java.nio.file.Path
 import java.time.Duration
 
-/** 配布元から、版の知らせと配布物を取得する。 */
+/** 配布元から、マニフェストと配布物を取得する。 */
 internal class UpdateHttp(private val ioDispatcher: CoroutineDispatcher) {
     // 配布物の URL は保管場所へ転送されるので、転送をたどる。
     private val client = HttpClient.newBuilder()

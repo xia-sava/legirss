@@ -18,15 +18,15 @@ internal data class UpdateRelease(
 )
 
 /**
- * 配布元が置く、配布中の版の知らせ（`latest.json`）。
+ * 配布元が置く、配布中の版を書いたマニフェスト（`latest.json`）。
  *
- * 配布物を取りにいく場所はアプリが決めていて、ここからは受け取らない。知らせが動かせるのは版と照合値だけになる。
+ * 配布物を取りにいく場所はアプリが決めていて、ここからは受け取らない。マニフェストが動かせるのは版と照合値だけになる。
  */
 internal object UpdateManifest {
     /**
-     * 知らせに付く署名を確かめる鍵。X.509 SubjectPublicKeyInfo の DER を base64 にした、ECDSA P-256 の公開鍵。
+     * マニフェストに付く署名を確かめる鍵。X.509 SubjectPublicKeyInfo の DER を base64 にした、ECDSA P-256 の公開鍵。
      *
-     * 配布の経路とも知らせの中身とも別に持つ、信頼の起点になる。
+     * 配布の経路ともマニフェストの中身とも別に持つ、信頼の起点になる。
      */
     const val PUBLIC_KEY: String =
         "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGqes4mE7TNzloY14nqHF6zB7bXa2COwF1qT9/4vktP0+rDMQsZEtWy2/KnoGoxiQh1UIB83jXkgekgD2XfCsmg=="

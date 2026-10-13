@@ -33,7 +33,7 @@ class UpdateInstallerTest {
         assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", sha256Of(file))
     }
 
-    /** 取得した配布物の照合値が知らせと合えば、置いた場所を返す。 */
+    /** 取得した配布物の照合値がマニフェストと合えば、置いた場所を返す。 */
     @Test
     fun returnsDownloadedInstallerWhenDigestMatches() = runTest {
         val expected = sha256Of(Files.createTempFile("legirss-update-test", ".bin").also { Files.write(it, content) })

@@ -6,7 +6,7 @@ import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 
-/** テスト用に、知らせへ署名する鍵の組を作って使う。 */
+/** テスト用に、マニフェストへ署名する鍵の組を作って使う。 */
 internal class ManifestSigner {
     private val keyPair: KeyPair = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
 

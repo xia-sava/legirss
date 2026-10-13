@@ -245,7 +245,7 @@ fun main(args: Array<String>) {
     }
 }
 
-/** アプリの更新の状況を、ツールバーに出す知らせにする。新しい版が無ければ何も出さない。 */
+/** アプリの更新の状況を、ツールバーに出す通知にする。新しい版が無ければ何も出さない。 */
 private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): ToolbarNotice? = when (state) {
     UpdateState.Idle -> null
     is UpdateState.Available -> ToolbarNotice("新しい版 ${state.release.version} に更新して再起動", onInstall)

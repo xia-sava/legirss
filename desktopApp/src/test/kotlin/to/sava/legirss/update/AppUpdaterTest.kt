@@ -14,7 +14,7 @@ import kotlin.test.assertIs
 class AppUpdaterTest {
     private val signer = ManifestSigner()
 
-    /** 配布元に置かれている版。null なら、知らせを取得できないものとして扱う。 */
+    /** 配布元に置かれている版。null なら、マニフェストを取得できないものとして扱う。 */
     private var publishedVersion: String? = "0.2.0"
 
     /** null でなければ、配布物を取得しようとしたときにこれを投げる。 */

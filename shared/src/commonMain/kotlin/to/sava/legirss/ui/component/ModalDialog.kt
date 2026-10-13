@@ -150,7 +150,7 @@ fun Checkbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String
     }
 }
 
-/** 窓の中の説明や知らせの文。 */
+/** 窓の中の説明やメッセージの文。 */
 @Composable
 fun DialogText(text: String, dim: Boolean = false) {
     val style = LocalLegirssStyle.current

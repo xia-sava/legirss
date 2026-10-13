@@ -130,7 +130,7 @@ data class MainUiState(
     val articleContent: ArticleContent? = null,
     /** 実行中の更新の進み具合。実行していなければ null。 */
     val updateProgress: UpdateProgress? = null,
-    /** 直近の更新の結果など、ステータスバーに出す知らせ。 */
+    /** 直近の更新の結果など、ステータスバーに出すメッセージ。 */
     val statusMessage: String? = null,
     /** 値が変わるたびに、記事の一覧へフォーカスを移す。 */
     val listFocusRequest: Int = 0,

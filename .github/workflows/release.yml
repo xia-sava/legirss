@@ -14,7 +14,7 @@ concurrency:
 
 env:
   JAVA_VERSION: "25"
-  # 版の知らせ（latest.json）の署名を確かめる公開鍵（X.509 SubjectPublicKeyInfo の DER を base64）。
+  # マニフェスト（latest.json）の署名を確かめる公開鍵（X.509 SubjectPublicKeyInfo の DER を base64）。
   # アプリへ埋め込んである値と同じでなければならない。
   MANIFEST_PUBLIC_KEY: "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGqes4mE7TNzloY14nqHF6zB7bXa2COwF1qT9/4vktP0+rDMQsZEtWy2/KnoGoxiQh1UIB83jXkgekgD2XfCsmg=="
 
@@ -103,7 +103,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # 配布物の照合値から版の知らせを作り、署名する。公開の権限は持たず、成果物として release へ渡す。
+  # 配布物の照合値からマニフェストを作り、署名する。公開の権限は持たず、成果物として release へ渡す。
   # 署名の鍵を持つのはこのジョブだけで、リリースを書き換える権限とは同居させない。
   manifest:
     needs: [version, desktop]
@@ -188,7 +188,7 @@ jobs:
           files: |
             artifacts/legirss.msi
 
-      # 更新の経路。入れてあるアプリは latest から版の知らせと配布物を取得するため、
+      # 更新の経路。入れてあるアプリは latest からマニフェストと配布物を取得するため、
       # 置き場所を動かさずに中身だけを差し替える。
       - name: Update latest release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2

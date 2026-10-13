@@ -113,7 +113,7 @@ private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
 private const val DELETE_ARTICLE_LABEL = "削除"
 
-/** ツールバーの右端に出す知らせ。[onClick] があれば、押せるボタンとして出す。 */
+/** ツールバーの右端に出す通知。[onClick] があれば、押せるボタンとして出す。 */
 @Immutable
 data class ToolbarNotice(
     val label: String,
@@ -121,7 +121,7 @@ data class ToolbarNotice(
 )
 
 /**
- * @param toolbarNotice ツールバーの右端に出す知らせ。出さなければ null。
+ * @param toolbarNotice ツールバーの右端に出す通知。出さなければ null。
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
  * @param layout 境目の位置と列の幅。
  * @param onLayoutChange 利用者が境目や列の幅を動かしたときに、動かした後の値を伝える。

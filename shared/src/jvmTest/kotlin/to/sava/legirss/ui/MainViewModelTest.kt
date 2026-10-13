@@ -340,7 +340,7 @@ class MainViewModelTest {
     private val freshFeed = "<rss version=\"2.0\"><channel><title>Feed</title>" +
         "<item><guid>fresh</guid><title>fresh</title></item></channel></rss>"
 
-    /** ウィンドウを表示している間の定期更新は、一覧の行と選択を動かさず、ツリーの記事数と知らせだけを更新する。 */
+    /** ウィンドウを表示している間の定期更新は、一覧の行と選択を動かさず、ツリーの記事数とステータスのメッセージだけを更新する。 */
     @Test
     fun keepsListDuringAutomaticUpdateWhileVisible() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()

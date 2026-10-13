@@ -40,7 +40,7 @@ class UpdateCheckerTest {
         assertEquals(UpdateCheck.UpToDate, check(currentVersion = "0.3.0"))
     }
 
-    /** 署名が置かれていない知らせ、署名の合わない知らせは、新しい版が書かれていても受け付けない。 */
+    /** 署名が置かれていないマニフェスト、署名の合わないマニフェストは、新しい版が書かれていても受け付けない。 */
     @Test
     fun rejectsManifestWithoutValidSignature() = runTest {
         publish(manifestOf("0.2.0"), signature = null)
@@ -52,7 +52,7 @@ class UpdateCheckerTest {
         assertIs<UpdateCheck.Failed>(mismatched)
     }
 
-    /** 知らせを取得できない場合と、署名は合うが中身を読めない場合は、失敗として扱う。 */
+    /** マニフェストを取得できない場合と、署名は合うが中身を読めない場合は、失敗として扱う。 */
     @Test
     fun failsWhenManifestIsMissingOrUnreadable() = runTest {
         val missing = check(currentVersion = "0.1.0")
