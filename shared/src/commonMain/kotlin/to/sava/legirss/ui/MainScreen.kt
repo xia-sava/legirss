@@ -157,9 +157,9 @@ private fun ArticleTable(
     val colors = LocalLegirssStyle.current.colors
     val focusRequester = remember { FocusRequester() }
 
-    // 起動してすぐキーで読み始められるよう、最初のフォーカスを記事の一覧に置く。
+    // 起動した直後と、しまっていたウィンドウを出した直後に、キーですぐ読み始められるようフォーカスを一覧に置く。
     // 一覧が画面に組み込まれた後に実行されるよう、一覧と同じ場所で行う。
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(state.listFocusRequest) { focusRequester.requestFocus() }
 
     DataTable(
         columns = ArticleColumn.entries.map { column ->

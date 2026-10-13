@@ -76,6 +76,15 @@ class LegirssStore(
         }.executeAsList()
     }
 
+    /** 設定の値を読み出す。保存されていなければ null。 */
+    suspend fun loadSetting(key: String): String? = access {
+        queries.selectSetting(key).executeAsOneOrNull()
+    }
+
+    suspend fun saveSetting(key: String, value: String) = access {
+        queries.upsertSetting(key, value)
+    }
+
     /** 記事の要約と本文を読み出す。記事が無ければ null。 */
     suspend fun loadArticleBody(articleId: Long): ArticleBody? = access {
         queries.selectArticleBody(articleId) { summary, content, link -> ArticleBody(summary, content, link) }

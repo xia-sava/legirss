@@ -94,6 +94,12 @@ SELECT id, channel_id, title, link, author, category, published_at, sort_at, sta
 FROM article
 WHERE channel_id IN ?;
 
+selectSetting:
+SELECT value FROM setting WHERE key = ?;
+
+upsertSetting:
+INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?);
+
 selectArticleBody:
 SELECT summary, content, link FROM article WHERE id = ?;
 

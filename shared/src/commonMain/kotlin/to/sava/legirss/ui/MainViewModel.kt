@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +45,7 @@ class MainViewModel(
 
     private var updateJob: Job? = null
     private var contentJob: Job? = null
+    private var windowVisible = true
 
     init {
         scope.launch {
@@ -146,33 +148,83 @@ class MainViewModel(
 
     /** 全てのチャンネルを更新する。更新中なら中止する。 */
     override fun updateAll() {
-        startOrCancelUpdate { null }
+        startOrCancelUpdate(allChannels = true)
     }
 
     /** 選んでいるノード以下のチャンネルを更新する。更新中なら中止する。 */
     override fun updateSelected() {
-        startOrCancelUpdate { tree.channelIdsUnder(mutableState.value.selectedNode) }
+        startOrCancelUpdate(allChannels = false)
     }
 
-    private fun startOrCancelUpdate(channelIds: () -> List<Long>?) {
+    /** 一覧を読み直して並べ直す。 */
+    override fun reloadList() {
+        scope.launch { reload() }
+    }
+
+    /**
+     * 定期更新として全てのチャンネルを更新する。すでに更新が動いていれば、新しくは始めずにそれを返す。
+     *
+     * ウィンドウを表示している間は、読んでいる途中で行が動かないよう、終わっても一覧を並べ直さない。
+     */
+    fun updateAutomatically(): Job =
+        updateJob?.takeIf { it.isActive } ?: launchUpdate(allChannels = true, automatic = true)
+
+    /** 次の定期更新までの待ち時間。前回の全体更新から [intervalMillis] が過ぎていれば 0。 */
+    suspend fun millisUntilNextAutomaticUpdate(intervalMillis: Long): Long {
+        val lastUpdatedAt = store.loadSetting(LAST_UPDATE_KEY)?.toLongOrNull() ?: return 0
+        return (lastUpdatedAt + intervalMillis - now()).coerceIn(0, intervalMillis)
+    }
+
+    /** [intervalMillis] ごとに定期更新を続ける。呼び出したコルーチンが取り消されるまで戻らない。 */
+    suspend fun runAutomaticUpdates(intervalMillis: Long): Nothing {
+        while (true) {
+            delay(millisUntilNextAutomaticUpdate(intervalMillis))
+            updateAutomatically().join()
+        }
+    }
+
+    /**
+     * ウィンドウを表示したか、しまったかを伝える。
+     *
+     * 表示したときは一覧を並べ直して選択を外し、一覧にフォーカスを置く。新着の印も消す。
+     */
+    fun setWindowVisible(visible: Boolean) {
+        windowVisible = visible
+        if (!visible) return
+        mutableState.update { it.copy(unseenNewArticles = false, listFocusRequest = it.listFocusRequest + 1) }
+        scope.launch { reload() }
+    }
+
+    private fun startOrCancelUpdate(allChannels: Boolean) {
         updateJob?.takeIf { it.isActive }?.let { running ->
             running.cancel()
             return
         }
-        updateJob = scope.launch {
-            mutableState.update { it.copy(statusMessage = null) }
-            try {
-                val result = updater.update(channelIds())
-                mutableState.update { it.copy(statusMessage = summaryOf(result)) }
-            } catch (cancellation: CancellationException) {
-                mutableState.update { it.copy(statusMessage = UPDATE_CANCELLED_MESSAGE) }
-                throw cancellation
-            } finally {
+        launchUpdate(allChannels, automatic = false)
+    }
+
+    private fun launchUpdate(allChannels: Boolean, automatic: Boolean): Job = scope.launch {
+        mutableState.update { it.copy(statusMessage = null) }
+        try {
+            val result = updater.update(if (allChannels) null else tree.channelIdsUnder(mutableState.value.selectedNode))
+            mutableState.update {
+                it.copy(
+                    statusMessage = summaryOf(result),
+                    unseenNewArticles = it.unseenNewArticles || (!windowVisible && result.newArticles > 0),
+                )
+            }
+        } catch (cancellation: CancellationException) {
+            mutableState.update { it.copy(statusMessage = UPDATE_CANCELLED_MESSAGE) }
+            throw cancellation
+        } finally {
+            withContext(NonCancellable) {
+                // 中止した場合も次の定期更新を待たせるため、全体更新を試みた時刻として記録する。
+                if (allChannels) store.saveSetting(LAST_UPDATE_KEY, now().toString())
                 // 中止した場合も、そこまでに取り込んだ分を画面に反映する。
-                withContext(NonCancellable) { reload() }
+                if (automatic && windowVisible) reloadTree() else reload()
             }
         }
-    }
+    }.also { updateJob = it }
 
     private fun summaryOf(result: UpdateProgress): String = buildString {
         append("更新しました  新着 ${result.newArticles} 件")
@@ -204,11 +256,16 @@ class MainViewModel(
     }
 
     private suspend fun reload() {
+        reloadTree()
+        showNode(mutableState.value.selectedNode)
+    }
+
+    /** ツリーと記事数だけを読み直す。一覧の行には触れない。 */
+    private suspend fun reloadTree() {
         nodes = store.loadTree()
         channelCounts = store.loadArticleCounts()
         tree = TreeModel(nodes, channelCounts)
-        mutableState.update { it.copy(channelNames = tree.channelNames) }
-        showNode(mutableState.value.selectedNode)
+        mutableState.update { it.copy(channelNames = tree.channelNames).withTree() }
     }
 
     private suspend fun showNode(selection: NodeSelection) {
@@ -234,5 +291,8 @@ class MainViewModel(
 
     private companion object {
         const val UPDATE_CANCELLED_MESSAGE = "更新を中止しました"
+
+        /** 全体の更新を最後に試みた時刻を保存する設定の名前。 */
+        const val LAST_UPDATE_KEY = "last_update_at"
     }
 }

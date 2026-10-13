@@ -28,6 +28,7 @@ class MainViewModelTest {
     private var feedBody = "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>"
 
     private val openedUrls = mutableListOf<String>()
+    private var clock = 1_000L
 
     private fun article(title: String, state: ArticleState, sortAt: Long) = NewArticle(
         identity = title,
@@ -62,13 +63,13 @@ class MainViewModelTest {
             ),
         )
         val fetcher = FeedFetcher(FeedFetcher.createClient(MockEngine { respond(feedBody) }, timeoutMillis = 1_000))
-        val updater = FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { 1_000L })
+        val updater = FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { clock })
         return MainViewModel(
             store = store,
             updater = updater,
             scope = backgroundScope,
             parseDispatcher = Dispatchers.Unconfined,
-            now = { 1_000L },
+            now = { clock },
             openUrl = openedUrls::add,
         ).also(MainViewModel::load)
     }
@@ -218,13 +219,70 @@ class MainViewModelTest {
         assertEquals(listOf("read"), viewModel.titles)
     }
 
+    private val freshFeed = "<rss version=\"2.0\"><channel><title>Feed</title>" +
+        "<item><guid>fresh</guid><title>fresh</title></item></channel></rss>"
+
+    /** ウィンドウを表示している間の定期更新は、一覧の行と選択を動かさず、ツリーの記事数と知らせだけを更新する。 */
+    @Test
+    fun keepsListDuringAutomaticUpdateWhileVisible() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+        feedBody = freshFeed
+
+        viewModel.updateAutomatically().join()
+
+        assertEquals(listOf("newer", "older", "read"), viewModel.titles)
+        assertEquals(2, viewModel.state.value.selectedArticleIndex)
+        assertEquals(ArticleCount(total = 4, unread = 3), viewModel.state.value.selectedNodeCount)
+        assertEquals("更新しました  新着 1 件", viewModel.state.value.statusMessage)
+        assertEquals(false, viewModel.state.value.unseenNewArticles)
+    }
+
+    /** ウィンドウをしまっている間の定期更新で新着があれば印を立てる。表示すると印が消え、一覧が並べ直される。 */
+    @Test
+    fun flagsNewArticlesWhileHiddenUntilShown() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.setWindowVisible(false)
+        feedBody = freshFeed
+
+        viewModel.updateAutomatically().join()
+        val flaggedWhileHidden = viewModel.state.value.unseenNewArticles
+        val focusRequestBefore = viewModel.state.value.listFocusRequest
+        viewModel.setWindowVisible(true)
+
+        assertEquals(true, flaggedWhileHidden)
+        assertEquals(false, viewModel.state.value.unseenNewArticles)
+        assertEquals(focusRequestBefore + 1, viewModel.state.value.listFocusRequest)
+        assertEquals(listOf("fresh", "newer", "older", "read"), viewModel.titles)
+        assertNull(viewModel.state.value.selectedArticleIndex)
+    }
+
+    /** 次の定期更新までの待ち時間は、全体更新をしたことが無ければ 0 で、更新した後は経過した分だけ間隔から減る。 */
+    @Test
+    fun computesDelayUntilNextAutomaticUpdate() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        val interval = 60_000L
+
+        val beforeAnyUpdate = viewModel.millisUntilNextAutomaticUpdate(interval)
+        viewModel.updateAutomatically().join()
+        val rightAfterUpdate = viewModel.millisUntilNextAutomaticUpdate(interval)
+        clock += 45_000
+        val later = viewModel.millisUntilNextAutomaticUpdate(interval)
+        clock += 60_000
+        val overdue = viewModel.millisUntilNextAutomaticUpdate(interval)
+
+        assertEquals(0, beforeAnyUpdate)
+        assertEquals(interval, rightAfterUpdate)
+        assertEquals(15_000, later)
+        assertEquals(0, overdue)
+    }
+
     /** 更新すると新着が一覧に入り、結果がステータスに出る。一覧を並べ直すので選択は外れる。 */
     @Test
     fun reloadsAfterUpdate() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
         viewModel.selectArticle(2)
-        feedBody = "<rss version=\"2.0\"><channel><title>Feed</title>" +
-            "<item><guid>fresh</guid><title>fresh</title></item></channel></rss>"
+        feedBody = freshFeed
 
         viewModel.updateAll()
         // 取得の応答は別のスレッドで返るので、取り込んだ記事が一覧に出るまで待つ。

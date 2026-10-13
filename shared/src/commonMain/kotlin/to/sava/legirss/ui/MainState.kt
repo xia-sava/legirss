@@ -74,6 +74,10 @@ data class MainUiState(
     val updateProgress: UpdateProgress? = null,
     /** 直近の更新の結果など、ステータスバーに出す知らせ。 */
     val statusMessage: String? = null,
+    /** ウィンドウをしまっている間に新着があり、まだ利用者が見ていない。 */
+    val unseenNewArticles: Boolean = false,
+    /** 値が変わるたびに、記事の一覧へフォーカスを移す。 */
+    val listFocusRequest: Int = 0,
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
 

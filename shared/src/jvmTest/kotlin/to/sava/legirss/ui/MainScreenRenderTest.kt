@@ -53,6 +53,8 @@ private object NoActions : MainActions {
     override fun updateAll() = Unit
 
     override fun updateSelected() = Unit
+
+    override fun reloadList() = Unit
 }
 
 /** メイン画面を画面に出さずに描画し、画像として保存する。 */
