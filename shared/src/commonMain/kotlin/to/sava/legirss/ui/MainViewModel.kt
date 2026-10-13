@@ -479,6 +479,8 @@ class MainViewModel(
             while (true) {
                 delay(millisUntilNextAutomaticUpdate(intervalMillis))
                 updateAutomatically().join()
+                // 更新するチャンネルが無いうちは時刻を記録しないので、間を置いてから確かめ直す。
+                if (store.loadSetting(LAST_UPDATE_KEY) == null) delay(RECHECK_WITHOUT_CHANNELS_MILLIS)
             }
         }
     }
@@ -529,7 +531,10 @@ class MainViewModel(
         } finally {
             withContext(NonCancellable) {
                 // 中止した場合も次の定期更新を待たせるため、全体更新を試みた時刻として記録する。
-                if (allChannels) store.saveSetting(LAST_UPDATE_KEY, now().toString())
+                // 更新するチャンネルが無かったときは記録せず、チャンネルが登録されたらすぐ更新できるようにする。
+                if (allChannels && store.loadUpdateTargets(channelIds = null).isNotEmpty()) {
+                    store.saveSetting(LAST_UPDATE_KEY, now().toString())
+                }
                 // 中止した場合も、そこまでに取り込んだ分を画面に反映する。
                 if (automatic && windowVisible) reloadTree() else reload()
             }
@@ -606,6 +611,7 @@ class MainViewModel(
         const val DUPLICATE_FEED_MESSAGE = "このフィードは登録済みです。もう一度「追加」を押すと重ねて登録します"
 
         const val MILLIS_PER_MINUTE = 60 * 1000L
+        const val RECHECK_WITHOUT_CHANNELS_MILLIS = MILLIS_PER_MINUTE
 
         const val APP_NAME = "legirss"
         const val OPML_EXTENSION = ".opml"

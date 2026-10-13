@@ -562,6 +562,17 @@ class MainViewModelTest {
         assertEquals("https://example.com/moved", store.loadUpdateTargets(channelIds = null).single().feedUrl)
     }
 
+    /** 更新するチャンネルが無い全体更新は、更新した時刻として記録しない。チャンネルができたら待たずに更新できる。 */
+    @Test
+    fun doesNotRecordUpdateWithoutChannels() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.setNodePaused(NodeSelection.Node(store.loadTree().single().id), paused = true)
+
+        viewModel.updateAutomatically().join()
+
+        assertEquals(0, viewModel.millisUntilNextAutomaticUpdate(intervalMillis = 60_000))
+    }
+
     /** 更新すると新着が一覧に入り、結果がステータスに出る。一覧を並べ直すので選択は外れる。 */
     @Test
     fun reloadsAfterUpdate() = runTest(UnconfinedTestDispatcher()) {
