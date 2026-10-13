@@ -46,6 +46,9 @@ sqldelight {
     databases {
         create("LegirssDatabase") {
             packageName.set("to.sava.legirss.data.db")
+            // 版ごとのスキーマの控え（N.db）を置く場所。移行のファイル（N.sqm）が正しいかを、この控えで確かめる。
+            schemaOutputDirectory.set(file("src/commonMain/sqldelight/databases"))
+            verifyMigrations.set(true)
         }
     }
 }

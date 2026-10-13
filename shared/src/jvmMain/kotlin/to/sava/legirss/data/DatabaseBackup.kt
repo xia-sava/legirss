@@ -3,7 +3,6 @@ package to.sava.legirss.data
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.sql.DriverManager
 import java.time.LocalDate
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
@@ -18,7 +17,7 @@ class DatabaseBackup(
     private val store: LegirssStore,
     private val today: () -> LocalDate,
 ) {
-    private val directory = dataDir.resolve(DIRECTORY_NAME)
+    private val directory = DatabaseFactory.backupDirOf(dataDir)
 
     /**
      * 今日の複製がまだ無ければ作り、古い複製を消す。
@@ -34,19 +33,10 @@ class DatabaseBackup(
         // 書き終えてから名前を付け替えるので、途中で止まっても壊れた複製は今日の分として残らない。
         val unfinished = directory.resolve("${target.name}$UNFINISHED_SUFFIX")
         Files.deleteIfExists(unfinished)
-        copyDatabaseTo(unfinished)
+        DatabaseFactory.copyTo(dataDir, unfinished)
         Files.move(unfinished, target, StandardCopyOption.ATOMIC_MOVE)
         removeOldGenerations()
         true
-    }
-
-    private fun copyDatabaseTo(file: Path) {
-        DriverManager.getConnection(DatabaseFactory.urlOf(dataDir)).use { connection ->
-            connection.prepareStatement("VACUUM INTO ?").use { statement ->
-                statement.setString(1, file.toString())
-                statement.execute()
-            }
-        }
     }
 
     private fun removeOldGenerations() {
@@ -60,7 +50,6 @@ class DatabaseBackup(
     companion object {
         const val GENERATIONS = 7
 
-        private const val DIRECTORY_NAME = "backup"
         private const val FILE_PREFIX = "legirss-"
         private const val FILE_SUFFIX = ".db"
         private const val UNFINISHED_SUFFIX = ".tmp"
