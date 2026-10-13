@@ -109,6 +109,8 @@ fun main(args: Array<String>) {
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
     val browser = BrowserLauncher()
+    // ウィンドウのタイトルに出す、アプリの名前と版。版を読めなければ名前だけにする。
+    val appTitle = listOfNotNull(APP_NAME, AppVersion.current()?.toString()).joinToString(" ")
     val fontFamily = uiFontFamily()
     val windowIcon = BitmapPainter(TrayController.drawIcon(TrayState.UNREAD, WINDOW_ICON_SIZE).toComposeImageBitmap())
     // 最初の描画から保存した配置で出すため、設定は画面を組み立てる前に読み終える。
@@ -218,7 +220,7 @@ fun main(args: Array<String>) {
         Window(
             onCloseRequest = { windowVisible = false },
             visible = windowVisible,
-            title = APP_NAME,
+            title = "${state.selectedNodeName} - $appTitle",
             icon = windowIcon,
             state = windowState,
             onKeyEvent = { event ->
