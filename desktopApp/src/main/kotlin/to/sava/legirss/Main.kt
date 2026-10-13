@@ -241,7 +241,12 @@ fun main(args: Array<String>) {
         ) {
             DisposableEffect(window) {
                 browser.ownerWindow = window
-                onDispose { browser.ownerWindow = null }
+                val focusLog = WindowFocusLog(window)
+                window.addWindowFocusListener(focusLog)
+                onDispose {
+                    window.removeWindowFocusListener(focusLog)
+                    browser.ownerWindow = null
+                }
             }
             // しまっていたウィンドウを出したときは、ほかのウィンドウの前へ持ってくる。
             LaunchedEffect(windowVisible) {

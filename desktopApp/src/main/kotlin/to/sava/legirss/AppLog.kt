@@ -7,7 +7,7 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import java.util.logging.SimpleFormatter
 
-/** アプリの動作の記録。失敗の内容を、あとから確かめられるように残す。 */
+/** アプリの動作の記録。失敗の内容と動作の経過を、あとから確かめられるように残す。 */
 internal object AppLog {
     private const val FILE_NAME_PATTERN = "legirss.%g.log"
     private const val FILE_SIZE_LIMIT_BYTES = 1024 * 1024
@@ -29,6 +29,11 @@ internal object AppLog {
         } catch (exception: IOException) {
             warn("記録用のファイルを開けません: $pattern", exception)
         }
+    }
+
+    /** 動作の経過を記録する。 */
+    fun info(message: String) {
+        logger.log(Level.INFO, message)
     }
 
     /** 動作は続けられる失敗を記録する。 */
