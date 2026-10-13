@@ -24,6 +24,31 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/** 何もしない操作。描画だけを確かめるときに渡す。 */
+private object NoActions : MainActions {
+    override fun selectNode(selection: NodeSelection) = Unit
+
+    override fun toggleNode(selection: NodeSelection) = Unit
+
+    override fun setFilter(filter: StateFilter) = Unit
+
+    override fun cycleFilter() = Unit
+
+    override fun sortBy(column: ArticleColumn) = Unit
+
+    override fun selectArticle(index: Int) = Unit
+
+    override fun readOn() = Unit
+
+    override fun cycleSelectedState(forward: Boolean) = Unit
+
+    override fun deleteSelectedArticle() = Unit
+
+    override fun updateAll() = Unit
+
+    override fun updateSelected() = Unit
+}
+
 /** メイン画面を画面に出さずに描画し、画像として保存する。 */
 internal object MainScreenRenderer {
     const val WIDTH = 1100
@@ -38,14 +63,7 @@ internal object MainScreenRenderer {
     fun render(state: MainUiState): Image =
         ImageComposeScene(WIDTH, HEIGHT, Density(1f)) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(
-                    state = state,
-                    onSelectNode = {},
-                    onToggleNode = {},
-                    onSelectArticle = {},
-                    onFilterChange = {},
-                    onSortBy = {},
-                )
+                MainScreen(state, NoActions)
             }
         }.use { scene ->
             // 遅延リストの中身は 2 回目の描画で確定する。

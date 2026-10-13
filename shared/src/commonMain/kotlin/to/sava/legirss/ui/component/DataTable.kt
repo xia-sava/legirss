@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -73,6 +75,8 @@ private const val SORT_MARK_DESCENDING = "▼"
  *
  * @param sortedColumn 並べ替えの印を出す列。
  * @param centerSelection キー操作で選択を動かしたとき、選択行を表示範囲の中央付近へ寄せる。
+ * @param focusRequester この一覧にフォーカスを移すためのもの。
+ * @param onKeyEvent 選択の移動に使わないキーが押されたときに呼ぶ。処理したら true を返す。
  */
 @Composable
 fun <C, R> DataTable(
@@ -87,15 +91,24 @@ fun <C, R> DataTable(
     onColumnResize: (C, Dp) -> Unit,
     centerSelection: Boolean,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    onKeyEvent: (KeyEvent) -> Boolean = { false },
     cell: @Composable (row: R, column: C) -> Unit,
 ) {
     val style = LocalLegirssStyle.current
     val density = LocalDensity.current
     val listState = rememberLazyListState()
-    val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
     val rowHeightPx = with(density) { style.listRowHeight.roundToPx() }
+
+    // キー操作以外で選択が表示範囲の外へ移ったときも、選択行が見えるようにする。
+    LaunchedEffect(selectedIndex) {
+        val laidOut = listState.layoutInfo.visibleItemsInfo.isNotEmpty()
+        if (selectedIndex != null && laidOut && !listState.isFullyVisible(selectedIndex)) {
+            listState.bringIntoView(selectedIndex, rowHeightPx, centerSelection)
+        }
+    }
 
     fun moveSelection(target: Int) {
         if (rows.isEmpty()) return
@@ -121,7 +134,7 @@ fun <C, R> DataTable(
                     Key.PageDown -> moveSelection(current + page)
                     Key.MoveHome -> moveSelection(0)
                     Key.MoveEnd -> moveSelection(rows.lastIndex)
-                    else -> return@onKeyEvent false
+                    else -> return@onKeyEvent onKeyEvent(event)
                 }
                 true
             },
@@ -249,15 +262,16 @@ private fun ResizeHandle(onDrag: (Dp) -> Unit, modifier: Modifier) {
 /** [index] の行が表示範囲に入るようスクロールする。[center] なら範囲の中央付近へ寄せる。 */
 private suspend fun LazyListState.bringIntoView(index: Int, rowHeightPx: Int, center: Boolean) {
     val viewportHeight = layoutInfo.viewportSize.height
-    if (center) {
-        scrollToItem(index, -(viewportHeight - rowHeightPx) / 2)
-        return
-    }
-    val visible = layoutInfo.visibleItemsInfo
-    val firstFullyVisible = visible.firstOrNull { it.offset >= 0 }?.index ?: return
-    val lastFullyVisible = visible.lastOrNull { it.offset + it.size <= viewportHeight }?.index ?: return
     when {
-        index < firstFullyVisible -> scrollToItem(index)
-        index > lastFullyVisible -> scrollToItem(index, -(viewportHeight - rowHeightPx))
+        center -> scrollToItem(index, -(viewportHeight - rowHeightPx) / 2)
+        isFullyVisible(index) -> Unit
+        index <= firstVisibleItemIndex -> scrollToItem(index)
+        else -> scrollToItem(index, -(viewportHeight - rowHeightPx))
     }
 }
+
+/** [index] の行が、上下とも欠けずに表示範囲に入っているか。 */
+private fun LazyListState.isFullyVisible(index: Int): Boolean =
+    layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+        ?.let { it.offset >= 0 && it.offset + it.size <= layoutInfo.viewportSize.height }
+        ?: false

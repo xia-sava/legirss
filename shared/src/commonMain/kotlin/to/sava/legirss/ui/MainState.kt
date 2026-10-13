@@ -7,6 +7,7 @@ import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
 import to.sava.legirss.ui.component.TreeIcon
 import to.sava.legirss.ui.component.TreeRow
+import to.sava.legirss.update.UpdateProgress
 
 /** ツリーで選んでいるもの。 */
 sealed interface NodeSelection {
@@ -60,9 +61,30 @@ data class MainUiState(
     val channelNames: Map<Long, String> = emptyMap(),
     val filter: StateFilter = StateFilter.ALL,
     val sort: ArticleSort = ArticleSort(),
+    /** 実行中の更新の進み具合。実行していなければ null。 */
+    val updateProgress: UpdateProgress? = null,
+    /** 直近の更新の結果など、ステータスバーに出す知らせ。 */
+    val statusMessage: String? = null,
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
+
+    /** 一覧の中で一番古い未読の記事の位置。未読が無ければ null。 */
+    val oldestUnreadIndex: Int?
+        get() = articles.withIndex()
+            .filter { it.value.state == ArticleState.UNREAD }
+            .minByOrNull { it.value.sortAt }
+            ?.index
 }
+
+/** ←→ のキーで閲覧状況を切り替える順番。 */
+private val stateCycle = listOf(ArticleState.UNREAD, ArticleState.READ, ArticleState.PROTECTED)
+
+/** 閲覧状況を 未読 → 既読 → 保護 → 未読 の順（[forward] が false なら逆順）で 1 つ進めた値。 */
+fun ArticleState.cycled(forward: Boolean): ArticleState =
+    stateCycle[(stateCycle.indexOf(this) + (if (forward) 1 else -1)).mod(stateCycle.size)]
+
+/** 購読状況の絞り込みを 全て → 未読 → 既読 → 保護 → 全て の順で 1 つ進めた値。 */
+fun StateFilter.next(): StateFilter = StateFilter.entries[(ordinal + 1) % StateFilter.entries.size]
 
 const val ALL_ARTICLES_LABEL = "全ての記事"
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -23,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -37,11 +40,13 @@ import to.sava.legirss.ui.component.HorizontalSplit
 import to.sava.legirss.ui.component.SegmentedButtons
 import to.sava.legirss.ui.component.TableColumn
 import to.sava.legirss.ui.component.TableText
+import to.sava.legirss.ui.component.ToolbarButton
 import to.sava.legirss.ui.component.TreeView
 import to.sava.legirss.ui.component.VerticalSplit
 import to.sava.legirss.ui.platform.formatListDateTime
 import to.sava.legirss.ui.theme.LegirssColors
 import to.sava.legirss.ui.theme.LocalLegirssStyle
+import to.sava.legirss.update.UpdateProgress
 
 private val DEFAULT_TREE_WIDTH = 240.dp
 private val DEFAULT_LIST_HEIGHT = 260.dp
@@ -54,41 +59,34 @@ private val DEFAULT_COLUMN_WIDTHS = mapOf(
     ArticleColumn.AUTHOR to 110.dp,
 )
 private val BAR_PADDING = 4.dp
+private val TOOLBAR_GROUP_GAP = 8.dp
 private val STATE_ICON_SIZE = 9.dp
 private val ARTICLE_PANE_PADDING = 8.dp
 private val ARTICLE_TITLE_EXTRA_SIZE = 3.sp
 
+private const val UPDATE_ALL_LABEL = "更新"
+private const val UPDATE_SELECTED_LABEL = "選択更新"
+private const val CANCEL_UPDATE_LABEL = "中止"
+
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
-    MainScreen(
-        state = state,
-        onSelectNode = viewModel::selectNode,
-        onToggleNode = viewModel::toggleNode,
-        onSelectArticle = viewModel::selectArticle,
-        onFilterChange = viewModel::setFilter,
-        onSortBy = viewModel::sortBy,
-        modifier = modifier,
-    )
+    MainScreen(state, viewModel, modifier)
 }
 
 @Composable
-fun MainScreen(
-    state: MainUiState,
-    onSelectNode: (NodeSelection) -> Unit,
-    onToggleNode: (NodeSelection) -> Unit,
-    onSelectArticle: (Int) -> Unit,
-    onFilterChange: (StateFilter) -> Unit,
-    onSortBy: (ArticleColumn) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun MainScreen(state: MainUiState, actions: MainActions, modifier: Modifier = Modifier) {
     val style = LocalLegirssStyle.current
     var treeWidth by remember { mutableStateOf(DEFAULT_TREE_WIDTH) }
     var listHeight by remember { mutableStateOf(DEFAULT_LIST_HEIGHT) }
     val columnWidths = remember { mutableStateMapOf<ArticleColumn, Dp>().apply { putAll(DEFAULT_COLUMN_WIDTHS) } }
+    val listFocusRequester = remember { FocusRequester() }
+
+    // 起動してすぐキーで読み始められるよう、最初のフォーカスを記事の一覧に置く。
+    LaunchedEffect(Unit) { listFocusRequester.requestFocus() }
 
     Column(modifier.fillMaxSize().background(style.colors.panel)) {
-        Toolbar(state.filter, onFilterChange)
+        Toolbar(state, actions)
         HorizontalSplit(
             firstWidth = treeWidth,
             onFirstWidthChange = { treeWidth = it },
@@ -97,8 +95,8 @@ fun MainScreen(
                 TreeView(
                     rows = state.treeRows,
                     selectedKey = state.selectedNode,
-                    onSelect = onSelectNode,
-                    onToggle = onToggleNode,
+                    onSelect = actions::selectNode,
+                    onToggle = actions::toggleNode,
                     modifier = Modifier.fillMaxSize(),
                 )
             },
@@ -110,10 +108,10 @@ fun MainScreen(
                     first = {
                         ArticleTable(
                             state = state,
+                            actions = actions,
                             columnWidths = columnWidths,
-                            onSelectArticle = onSelectArticle,
-                            onSortBy = onSortBy,
                             onColumnResize = { column, width -> columnWidths[column] = width },
+                            focusRequester = listFocusRequester,
                         )
                     },
                     second = { ArticlePane(state.selectedArticle, state.channelNames) },
@@ -125,17 +123,22 @@ fun MainScreen(
 }
 
 @Composable
-private fun Toolbar(filter: StateFilter, onFilterChange: (StateFilter) -> Unit) {
+private fun Toolbar(state: MainUiState, actions: MainActions) {
     val style = LocalLegirssStyle.current
+    val updating = state.updateProgress != null
     Row(
         modifier = Modifier.fillMaxWidth().height(style.toolbarHeight).padding(horizontal = BAR_PADDING, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ToolbarButton(if (updating) CANCEL_UPDATE_LABEL else UPDATE_ALL_LABEL, onClick = actions::updateAll)
+        if (!updating) ToolbarButton(UPDATE_SELECTED_LABEL, onClick = actions::updateSelected)
+        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
         SegmentedButtons(
             options = StateFilter.entries,
-            selected = filter,
+            selected = state.filter,
             label = StateFilter::label,
-            onSelect = onFilterChange,
+            onSelect = actions::setFilter,
+            modifier = Modifier.fillMaxHeight(),
         )
     }
 }
@@ -143,10 +146,10 @@ private fun Toolbar(filter: StateFilter, onFilterChange: (StateFilter) -> Unit) 
 @Composable
 private fun ArticleTable(
     state: MainUiState,
+    actions: MainActions,
     columnWidths: Map<ArticleColumn, Dp>,
-    onSelectArticle: (Int) -> Unit,
-    onSortBy: (ArticleColumn) -> Unit,
     onColumnResize: (ArticleColumn, Dp) -> Unit,
+    focusRequester: FocusRequester,
 ) {
     val colors = LocalLegirssStyle.current.colors
     DataTable(
@@ -161,13 +164,15 @@ private fun ArticleTable(
         rows = state.articles,
         rowKey = ArticleRow::id,
         selectedIndex = state.selectedArticleIndex,
-        onSelectIndex = onSelectArticle,
+        onSelectIndex = actions::selectArticle,
         sortedColumn = state.sort.column,
         sortDescending = state.sort.descending,
-        onColumnClick = onSortBy,
+        onColumnClick = actions::sortBy,
         onColumnResize = onColumnResize,
         centerSelection = true,
         modifier = Modifier.fillMaxSize(),
+        focusRequester = focusRequester,
+        onKeyEvent = actions::handleArticleListKey,
     ) { article, column ->
         val unread = article.state == ArticleState.UNREAD
         when (column) {
@@ -227,8 +232,18 @@ private fun StatusBar(state: MainUiState) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.width(BAR_PADDING))
         Box(Modifier.weight(1f))
+        BasicText(
+            text = state.updateProgress?.let(::progressText) ?: state.statusMessage.orEmpty(),
+            style = style.textStyle(),
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
         BasicText(text = "表示 ${state.articles.size} 件", style = style.textStyle(color = style.colors.textDim))
     }
+}
+
+private fun progressText(progress: UpdateProgress): String = buildString {
+    append("更新中 ${progress.finished}/${progress.total}  新着 ${progress.newArticles} 件")
+    if (progress.failed > 0) append("  失敗 ${progress.failed} 件")
 }

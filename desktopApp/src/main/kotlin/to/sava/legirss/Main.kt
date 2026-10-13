@@ -15,8 +15,11 @@ import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.Dispatchers
 import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
+import to.sava.legirss.feed.FeedHttp
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainViewModel
+import to.sava.legirss.ui.handleWindowKey
+import to.sava.legirss.update.FeedUpdater
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import java.nio.file.Path
@@ -28,14 +31,23 @@ private val DEFAULT_WINDOW_SIZE = DpSize(1100.dp, 720.dp)
 
 fun main() {
     val store = LegirssStore(DatabaseFactory.open(dataDir()), Dispatchers.IO)
+    val updater = FeedUpdater(
+        store = store,
+        fetcher = FeedHttp.createFetcher(),
+        parseDispatcher = Dispatchers.Default,
+        now = System::currentTimeMillis,
+    )
     val style = LegirssStyle(fontFamily = uiFontFamily())
     application {
         val scope = rememberCoroutineScope()
-        val viewModel = remember { MainViewModel(store, scope).also(MainViewModel::load) }
+        val viewModel = remember {
+            MainViewModel(store, updater, scope, now = System::currentTimeMillis).also(MainViewModel::load)
+        }
         Window(
             onCloseRequest = ::exitApplication,
             title = APP_NAME,
             state = rememberWindowState(size = DEFAULT_WINDOW_SIZE),
+            onKeyEvent = viewModel::handleWindowKey,
         ) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
                 MainScreen(viewModel)
