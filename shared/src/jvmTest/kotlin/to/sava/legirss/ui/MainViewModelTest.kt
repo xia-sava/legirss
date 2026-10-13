@@ -30,6 +30,10 @@ class MainViewModelTest {
     private val openedUrls = mutableListOf<String>()
     private var clock = 1_000L
 
+    /** null でなければ、時刻を尋ねられたときにこれを投げる。 */
+    private var clockFailure: Exception? = null
+    private val reportedErrors = mutableListOf<String>()
+
     private fun article(title: String, state: ArticleState, sortAt: Long) = NewArticle(
         identity = title,
         title = title,
@@ -63,14 +67,16 @@ class MainViewModelTest {
             ),
         )
         val fetcher = FeedFetcher(FeedFetcher.createClient(MockEngine { respond(feedBody) }, timeoutMillis = 1_000))
-        val updater = FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { clock })
+        val reportError: (String, Throwable) -> Unit = { message, _ -> reportedErrors.add(message) }
+        val updater = FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { clock }, reportError = reportError)
         return MainViewModel(
             store = store,
             updater = updater,
-            scope = backgroundScope,
+            parentScope = backgroundScope,
             parseDispatcher = Dispatchers.Unconfined,
-            now = { clock },
+            now = { clockFailure?.let { throw it } ?: clock },
             openUrl = openedUrls::add,
+            reportError = reportError,
         ).also(MainViewModel::load)
     }
 
@@ -203,6 +209,23 @@ class MainViewModelTest {
         assertEquals(1, viewModel.state.value.selectedArticleIndex)
         assertEquals(ArticleCount(total = 2, unread = 2), viewModel.state.value.selectedNodeCount)
         assertEquals(setOf("newer", "older"), storedStates().keys)
+    }
+
+    /** 操作の処理で想定していない例外が出たら、記録してステータスに出す。以後の操作は続けられる。 */
+    @Test
+    fun reportsUnexpectedFailureAndKeepsWorking() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+        clockFailure = IllegalStateException("unexpected")
+
+        viewModel.deleteSelectedArticle()
+        val messageAfterFailure = viewModel.state.value.statusMessage
+        clockFailure = null
+        viewModel.selectArticle(0)
+
+        assertEquals("エラーが発生しました", messageAfterFailure)
+        assertEquals(listOf("エラーが発生しました"), reportedErrors)
+        assertEquals(ArticleState.READ, storedStates()["newer"])
     }
 
     /** 絞り込みを切り替えると、その状況の記事だけが並ぶ。 */

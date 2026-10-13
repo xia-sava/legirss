@@ -90,7 +90,7 @@ class SingleInstance private constructor(
             try {
                 Socket().use { it.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), CONNECT_TIMEOUT_MILLIS) }
             } catch (exception: IOException) {
-                System.err.println("起動済みのアプリへ合図を送れませんでした: ${exception.message}")
+                AppLog.warn("起動済みのアプリへ合図を送れませんでした", exception)
             }
         }
     }

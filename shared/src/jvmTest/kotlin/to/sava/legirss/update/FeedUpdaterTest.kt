@@ -27,6 +27,7 @@ class FeedUpdaterTest {
     private val feedUrl = "https://example.com/feed"
     private val store = LegirssStore(DatabaseFactory.openInMemory(), Dispatchers.Unconfined)
     private val requests = mutableListOf<HttpRequestData>()
+    private val reportedErrors = mutableListOf<String>()
     private var clock = 1_000_000L
 
     private fun updater(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): FeedUpdater {
@@ -35,10 +36,10 @@ class FeedUpdaterTest {
             handler(request)
         }
         val fetcher = FeedFetcher(FeedFetcher.createClient(engine, timeoutMillis = 1_000))
-        return FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { clock })
+        return FeedUpdater(store, fetcher, Dispatchers.Unconfined, now = { clock }, reportError = { message, _ -> reportedErrors.add(message) })
     }
 
-    private suspend fun registerChannel(paused: Boolean = false, firstFetchAsRead: Boolean = false) {
+    private suspend fun registerChannel(paused: Boolean = false, firstFetchAsRead: Boolean = false, feedUrl: String = this.feedUrl) {
         store.importNodes(
             listOf(
                 NewChannel(
@@ -258,6 +259,22 @@ class FeedUpdaterTest {
         assertEquals(1, notAFeed.failed)
         assertEquals(true, errorAfterNotAFeed)
         assertEquals(false, channel().channel?.hasError)
+    }
+
+    /** 1 つのチャンネルの更新で想定していない例外が出ても、失敗として数えて記録し、ほかのチャンネルは更新する。 */
+    @Test
+    fun continuesAfterUnexpectedFailureOfOneChannel() = runTest {
+        registerChannel(feedUrl = "https://broken.example/feed")
+        registerChannel()
+
+        val progress = updater { request ->
+            check(request.url.host != "broken.example") { "unexpected" }
+            respond(rss("a" to "First"))
+        }.update(channelIds = null)
+
+        assertEquals(UpdateProgress(total = 2, finished = 2, newArticles = 1, failed = 1), progress)
+        assertEquals(listOf("チャンネルを更新できません: https://broken.example/feed"), reportedErrors)
+        assertEquals(listOf("First"), articles().map { it.title })
     }
 
     /** 購読中止のチャンネルと、指定の範囲に入らないチャンネルは取得しない。 */

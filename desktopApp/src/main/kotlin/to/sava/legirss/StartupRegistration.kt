@@ -48,7 +48,7 @@ class StartupRegistration(
                     .start()
                     .waitFor()
             } catch (exception: IOException) {
-                System.err.println("コマンドを実行できません: ${command.first()} (${exception.message})")
+                AppLog.warn("コマンドを実行できません: ${command.first()}", exception)
                 COMMAND_NOT_RUN
             }
 

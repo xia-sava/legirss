@@ -1,5 +1,6 @@
 package to.sava.legirss.update
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,6 +39,8 @@ class FeedUpdater(
     /** フィードの解釈に使う。 */
     private val parseDispatcher: CoroutineDispatcher,
     private val now: () -> Long,
+    /** 想定していない失敗を、説明と原因を添えて記録する。 */
+    private val reportError: (String, Throwable) -> Unit,
     private val parallelism: Int = DEFAULT_PARALLELISM,
 ) {
     private val mutableProgress = MutableStateFlow<UpdateProgress?>(null)
@@ -59,7 +62,7 @@ class FeedUpdater(
             coroutineScope {
                 targets.map { target ->
                     async {
-                        val outcome = permits.withPermit { updateChannel(target, retention) }
+                        val outcome = permits.withPermit { updateChannelOrReport(target, retention) }
                         mutableProgress.update { it?.plus(outcome) }
                     }
                 }.awaitAll()
@@ -68,6 +71,17 @@ class FeedUpdater(
         } finally {
             mutableProgress.value = null
         }
+    }
+
+    /** チャンネルを更新する。想定していない失敗は記録して、そのチャンネルの失敗として扱う。 */
+    private suspend fun updateChannelOrReport(target: UpdateTarget, retention: Retention): Outcome = try {
+        updateChannel(target, retention)
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (exception: Exception) {
+        // 1 つのチャンネルで何が起きても、ほかのチャンネルの更新は続ける。そのため例外の種類を絞らない。
+        reportError("チャンネルを更新できません: ${target.feedUrl}", exception)
+        Outcome.Failed
     }
 
     private suspend fun updateChannel(target: UpdateTarget, retention: Retention): Outcome {

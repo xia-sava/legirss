@@ -2,9 +2,11 @@ package to.sava.legirss.ui
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,15 +27,31 @@ import to.sava.legirss.update.UpdateProgress
 class MainViewModel(
     private val store: LegirssStore,
     private val updater: FeedUpdater,
-    private val scope: CoroutineScope,
+    parentScope: CoroutineScope,
     /** 記事の本文の解釈に使う。 */
     private val parseDispatcher: CoroutineDispatcher,
     private val now: () -> Long,
     /** URL を外部のブラウザで開く。 */
     private val openUrl: (String) -> Unit,
+    /** 想定していない失敗を、説明と原因を添えて記録する。 */
+    private val reportError: (String, Throwable) -> Unit,
 ) : MainActions {
     private val mutableState = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = mutableState.asStateFlow()
+
+    /**
+     * 操作ごとの処理を動かす場所。
+     *
+     * 1 つの処理が失敗しても、ほかの処理と以後の操作を止めない。失敗は記録してステータスに出す。
+     */
+    private val scope = CoroutineScope(
+        parentScope.coroutineContext +
+            SupervisorJob(parentScope.coroutineContext[Job]) +
+            CoroutineExceptionHandler { _, exception ->
+                reportError(UNEXPECTED_ERROR_MESSAGE, exception)
+                mutableState.update { it.copy(statusMessage = UNEXPECTED_ERROR_MESSAGE) }
+            },
+    )
 
     private var nodes: List<TreeNode> = emptyList()
     private var channelCounts: Map<Long, ArticleCount> = emptyMap()
@@ -288,6 +306,7 @@ class MainViewModel(
 
     private companion object {
         const val UPDATE_CANCELLED_MESSAGE = "更新を中止しました"
+        const val UNEXPECTED_ERROR_MESSAGE = "エラーが発生しました"
 
         /** 全体の更新を最後に試みた時刻を保存する設定の名前。 */
         const val LAST_UPDATE_KEY = "last_update_at"

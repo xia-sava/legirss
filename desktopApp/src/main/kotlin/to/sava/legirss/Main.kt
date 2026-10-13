@@ -62,12 +62,16 @@ fun main(args: Array<String>) {
     var windowVisible by mutableStateOf(StartupRegistration.START_IN_TRAY_OPTION !in args)
     SingleInstance.acquire(dataDir) { SwingUtilities.invokeLater { windowVisible = true } } ?: return
 
+    AppLog.writeTo(dataDir)
+    Thread.setDefaultUncaughtExceptionHandler { _, exception -> AppLog.error("処理されなかった例外", exception) }
+
     val store = LegirssStore(DatabaseFactory.open(dataDir), Dispatchers.IO)
     val updater = FeedUpdater(
         store = store,
         fetcher = FeedHttp.createFetcher(),
         parseDispatcher = Dispatchers.Default,
         now = System::currentTimeMillis,
+        reportError = AppLog::error,
     )
     val backup = DatabaseBackup(dataDir, store, LocalDate::now)
     val style = LegirssStyle(fontFamily = uiFontFamily())
@@ -79,10 +83,11 @@ fun main(args: Array<String>) {
             MainViewModel(
                 store = store,
                 updater = updater,
-                scope = scope,
+                parentScope = scope,
                 parseDispatcher = Dispatchers.Default,
                 now = System::currentTimeMillis,
                 openUrl = ::openInBrowser,
+                reportError = AppLog::error,
             ).also(MainViewModel::load)
         }
         val state by viewModel.state.collectAsState()
@@ -158,9 +163,9 @@ private suspend fun runDailyBackups(backup: DatabaseBackup): Nothing {
         try {
             backup.backUpIfDue()
         } catch (exception: IOException) {
-            System.err.println("バックアップを作れません: ${exception.message}")
+            AppLog.warn("バックアップを作れません", exception)
         } catch (exception: SQLException) {
-            System.err.println("バックアップを作れません: ${exception.message}")
+            AppLog.warn("バックアップを作れません", exception)
         }
         delay(BACKUP_CHECK_INTERVAL_MILLIS)
     }
@@ -171,9 +176,9 @@ internal fun useSystemLookAndFeel() {
     try {
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
     } catch (exception: ReflectiveOperationException) {
-        System.err.println("OS の見た目を適用できません: ${exception.message}")
+        AppLog.warn("OS の見た目を適用できません", exception)
     } catch (exception: UnsupportedLookAndFeelException) {
-        System.err.println("OS の見た目を適用できません: ${exception.message}")
+        AppLog.warn("OS の見た目を適用できません", exception)
     }
 }
 
@@ -188,13 +193,13 @@ private fun dataDir(): Path =
         ?: System.getenv("APPDATA")?.let { Path.of(it, APP_NAME) }
         ?: Path.of(System.getProperty("user.home"), ".$APP_NAME")
 
-/** URL を既定のブラウザで開く。開けなかった場合は理由を標準エラーに出す。 */
+/** URL を既定のブラウザで開く。開けなかった場合は理由を記録する。 */
 private fun openInBrowser(url: String) {
     try {
         Desktop.getDesktop().browse(URI(url))
     } catch (exception: URISyntaxException) {
-        System.err.println("URL として扱えません: $url (${exception.message})")
+        AppLog.warn("URL として扱えません: $url", exception)
     } catch (exception: IOException) {
-        System.err.println("ブラウザで開けません: $url (${exception.message})")
+        AppLog.warn("ブラウザで開けません: $url", exception)
     }
 }
