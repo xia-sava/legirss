@@ -28,6 +28,17 @@ class SingleInstance private constructor(
         lock.channel().close()
     }
 
+    private fun acceptSignals(onActivate: () -> Unit) {
+        while (!server.isClosed) {
+            try {
+                server.accept().close()
+                onActivate()
+            } catch (_: IOException) {
+                // 待ち受けを閉じたときもここへ来る。閉じていなければ次の接続を待つ。
+            }
+        }
+    }
+
     companion object {
         private const val LOCK_FILE_NAME = "legirss.lock"
         private const val PORT_FILE_NAME = "legirss.port"
@@ -50,8 +61,11 @@ class SingleInstance private constructor(
             }
             val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
             Files.writeString(portFile, server.localPort.toString())
-            thread(isDaemon = true, name = "single-instance") { acceptSignals(server, onActivate) }
-            return SingleInstance(lock, server)
+            val instance = SingleInstance(lock, server)
+            // ロックは握っているオブジェクトが回収されると外れる。待ち受けのスレッドから参照させて、
+            // 呼び出し側が戻り値を保持しなくても、プロセスが終わるまで握り続けるようにする。
+            thread(isDaemon = true, name = "single-instance") { instance.acceptSignals(onActivate) }
+            return instance
         }
 
         private fun tryLock(lockFile: Path): FileLock? {
@@ -64,17 +78,6 @@ class SingleInstance private constructor(
             }
             if (lock == null) channel.close()
             return lock
-        }
-
-        private fun acceptSignals(server: ServerSocket, onActivate: () -> Unit) {
-            while (!server.isClosed) {
-                try {
-                    server.accept().close()
-                    onActivate()
-                } catch (_: IOException) {
-                    // 待ち受けを閉じたときもここへ来る。閉じていなければ次の接続を待つ。
-                }
-            }
         }
 
         /** 動いている側が待ち受けているポートへつなぐ。つながらなくても、起動を諦めることに変わりはない。 */

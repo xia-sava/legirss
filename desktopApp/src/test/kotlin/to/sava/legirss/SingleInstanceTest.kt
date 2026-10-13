@@ -26,6 +26,27 @@ class SingleInstanceTest {
         }
     }
 
+    /** 呼び出し側が戻り値を保持していなくても、ガベージコレクションの後までロックを握り続ける。 */
+    @Test
+    fun keepsLockAfterGarbageCollectionWithoutReference() {
+        val heldPort = acquireWithoutKeepingReference()
+        repeat(5) {
+            System.gc()
+            Thread.sleep(100)
+        }
+
+        val second = SingleInstance.acquire(dataDir) {}
+
+        second.use { assertNull(second) }
+        assertTrue(heldPort > 0)
+    }
+
+    /** 戻り値を捨てて、握ったことだけを確かめる。待ち受けのポート番号を返す。 */
+    private fun acquireWithoutKeepingReference(): Int {
+        assertNotNull(SingleInstance.acquire(dataDir) {})
+        return Files.readString(dataDir.resolve("legirss.port")).trim().toInt()
+    }
+
     /** 先に起動した側が終われば、次の起動が成立する。 */
     @Test
     fun allowsNextInstanceAfterFirstCloses() {
