@@ -23,6 +23,7 @@ import javax.swing.JCheckBoxMenuItem
 import javax.swing.JDialog
 import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
+import javax.swing.Timer
 import javax.swing.UIManager
 import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
@@ -79,21 +80,20 @@ private fun drawVisuallyCentered(
     graphics2D.drawString(text, textRect.x.toFloat(), baseline.toFloat())
 }
 
-/** タスクトレイのアイコンで表す状態。色で見分ける。 */
+/** タスクトレイのアイコンで表す、未読の有無。色で見分ける。 */
 enum class TrayState(val color: Color) {
     /** 未読が無い。 */
     NORMAL(Color(0x3F, 0xA9, 0x4B)),
 
     /** 未読がある。 */
     UNREAD(Color(0xF0, 0x8A, 0x24)),
-
-    UPDATING(Color(0x2B, 0x7C, 0xD3)),
 }
 
 /**
  * タスクトレイのアイコンとメニュー。
  *
  * 左クリックでウィンドウの表示と非表示を切り替え、右クリックでメニューを出す。
+ * アイコンの色は未読の有無を表す。更新している間は、絵の点と弧が内側から順に明るくなる動きを繰り返す。
  */
 class TrayController(
     private val onToggleWindow: () -> Unit,
@@ -103,13 +103,24 @@ class TrayController(
     private val onExit: () -> Unit,
     private val startup: StartupRegistration,
 ) {
-    private val icons = TrayState.entries.associateWith(::drawIcon)
+    // 状態ごとの、明るく描く部品の数（0 から全部まで）を変えた絵。最後のものが、止まっているときの絵になる。
+    private val frames = TrayState.entries.associateWith { state ->
+        (0..GLYPH_PARTS).map { litParts -> drawIcon(state, litParts = litParts) }
+    }
     private var trayIcon: TrayIcon? = null
+    private var state = TrayState.NORMAL
+    private var litParts = GLYPH_PARTS
+
+    // 更新している間、明るく描く部品の数を 1 つずつ増やし、全部まで行ったら 0 へ戻す。
+    private val animation = Timer(ANIMATION_INTERVAL_MILLIS) {
+        litParts = (litParts + 1) % (GLYPH_PARTS + 1)
+        showFrame()
+    }
 
     /** アイコンをタスクトレイに出す。タスクトレイを使えない環境では何もしない。 */
     fun install() {
         if (!SystemTray.isSupported()) return
-        trayIcon = TrayIcon(icons.getValue(TrayState.NORMAL), APP_TITLE).apply {
+        trayIcon = TrayIcon(frames.getValue(state).last(), APP_TITLE).apply {
             isImageAutoSize = true
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(event: MouseEvent) {
@@ -123,14 +134,29 @@ class TrayController(
         }.also(SystemTray.getSystemTray()::add)
     }
 
-    fun update(state: TrayState, tooltip: String) {
-        trayIcon?.apply {
-            image = icons.getValue(state)
-            toolTip = tooltip
+    /**
+     * アイコンの表示を合わせる。
+     *
+     * @param updating 更新している最中か。その間は、アイコンの絵を動かす。
+     */
+    fun update(state: TrayState, updating: Boolean, tooltip: String) {
+        this.state = state
+        trayIcon?.toolTip = tooltip
+        if (updating) {
+            if (!animation.isRunning) animation.start()
+        } else {
+            animation.stop()
+            litParts = GLYPH_PARTS
         }
+        showFrame()
+    }
+
+    private fun showFrame() {
+        trayIcon?.image = frames.getValue(state)[litParts]
     }
 
     fun remove() {
+        animation.stop()
         trayIcon?.let(SystemTray.getSystemTray()::remove)
         trayIcon = null
     }
@@ -215,24 +241,39 @@ class TrayController(
         // アイコンの絵を描くときの基準の大きさ。座標はこの大きさで決めてあり、ほかの大きさでは拡大して描く。
         private const val ICON_SIZE = 32
 
+        // 絵を作っている部品の数。内側から、点、小さい弧、大きい弧。
+        internal const val GLYPH_PARTS = 3
+
+        private const val ANIMATION_INTERVAL_MILLIS = 300
+
+        // 明るくしていない部品を描く色。地の色が透けて、薄く見える。
+        private val DIM_GLYPH_COLOR = Color(255, 255, 255, 80)
+
         /**
          * 状態ごとの色で塗った角の丸い四角に、電波を表す点と弧を描く。
          *
          * @param size 画像の一辺の画素数。
+         * @param litParts 明るく描く部品の数。内側から数える。残りの部品は薄く描く。
          */
-        internal fun drawIcon(state: TrayState, size: Int = ICON_SIZE): BufferedImage = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB).apply {
-            createGraphics().run {
-                setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                scale(size.toDouble() / ICON_SIZE, size.toDouble() / ICON_SIZE)
-                color = state.color
-                fillRoundRect(1, 1, 30, 30, 8, 8)
-                color = Color.WHITE
-                fillOval(6, 21, 6, 6)
-                stroke = BasicStroke(3.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-                draw(Arc2D.Double(-1.0, 14.0, 20.0, 20.0, 0.0, 90.0, Arc2D.OPEN))
-                draw(Arc2D.Double(-8.0, 7.0, 34.0, 34.0, 0.0, 90.0, Arc2D.OPEN))
-                dispose()
+        internal fun drawIcon(state: TrayState, size: Int = ICON_SIZE, litParts: Int = GLYPH_PARTS): BufferedImage =
+            BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB).apply {
+                createGraphics().run {
+                    setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+                    scale(size.toDouble() / ICON_SIZE, size.toDouble() / ICON_SIZE)
+                    color = state.color
+                    fillRoundRect(1, 1, 30, 30, 8, 8)
+                    stroke = BasicStroke(3.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+                    val parts: List<Graphics2D.() -> Unit> = listOf(
+                        { fillOval(6, 21, 6, 6) },
+                        { draw(Arc2D.Double(-1.0, 14.0, 20.0, 20.0, 0.0, 90.0, Arc2D.OPEN)) },
+                        { draw(Arc2D.Double(-8.0, 7.0, 34.0, 34.0, 0.0, 90.0, Arc2D.OPEN)) },
+                    )
+                    parts.forEachIndexed { index, drawPart ->
+                        color = if (index < litParts) Color.WHITE else DIM_GLYPH_COLOR
+                        drawPart()
+                    }
+                    dispose()
+                }
             }
-        }
     }
 }

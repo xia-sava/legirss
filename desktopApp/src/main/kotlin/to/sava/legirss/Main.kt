@@ -177,7 +177,11 @@ fun main(args: Array<String>) {
         }
         DisposableEffect(Unit) { onDispose(tray::remove) }
         LaunchedEffect(state.updateProgress != null, state.totalCount.unread) {
-            tray.update(trayStateOf(state), "$APP_NAME  未読 ${state.totalCount.unread} 件")
+            tray.update(
+                state = trayStateOf(state),
+                updating = state.updateProgress != null,
+                tooltip = "$APP_NAME  未読 ${state.totalCount.unread} 件",
+            )
         }
 
         LaunchedEffect(windowVisible) { viewModel.setWindowVisible(windowVisible) }
@@ -279,11 +283,8 @@ private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): ToolbarNo
     is UpdateState.Failed -> ToolbarNotice("更新できませんでした。もう一度試す", onInstall)
 }
 
-private fun trayStateOf(state: MainUiState): TrayState = when {
-    state.updateProgress != null -> TrayState.UPDATING
-    state.totalCount.unread > 0 -> TrayState.UNREAD
-    else -> TrayState.NORMAL
-}
+private fun trayStateOf(state: MainUiState): TrayState =
+    if (state.totalCount.unread > 0) TrayState.UNREAD else TrayState.NORMAL
 
 /** つながっている全ての画面の範囲。 */
 private fun screenBounds(): List<Rectangle> =
