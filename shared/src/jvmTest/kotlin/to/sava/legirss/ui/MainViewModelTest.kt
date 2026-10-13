@@ -132,7 +132,7 @@ class MainViewModelTest {
 
     /** 記事を選んでいないときに読み進めると一番古い未読を選び、続けると 1 つ上の行へ進む。先頭では止まる。 */
     @Test
-    fun readsOnFromOldestUnreadUpwards() = runTest(UnconfinedTestDispatcher()) {
+    fun readsOnFromLastUnreadUpwards() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
 
         viewModel.readOn()

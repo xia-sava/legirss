@@ -130,6 +130,20 @@ class MainStateTest {
         assertEquals(listOf(3L), protected.map { it.id })
     }
 
+    /** 読み始める記事は一覧で一番下にある未読とする。日時が同じ未読が並んでいても、下の行を選ぶ。 */
+    @Test
+    fun findsLastUnreadByPosition() {
+        val sameTime = listOf(
+            article(1, channelId = 2, state = ArticleState.UNREAD, sortAt = 100),
+            article(2, channelId = 2, state = ArticleState.UNREAD, sortAt = 100),
+            article(3, channelId = 2, state = ArticleState.UNREAD, sortAt = 100),
+            article(4, channelId = 2, state = ArticleState.READ, sortAt = 50),
+        )
+
+        assertEquals(2, MainUiState(articles = sameTime).lastUnreadIndex)
+        assertNull(MainUiState(articles = sameTime.takeLast(1)).lastUnreadIndex)
+    }
+
     /** 同じ列を選ぶと向きが反転し、別の列を選ぶと向きを保ったまま列だけが変わる。 */
     @Test
     fun togglesSortDirectionOnSameColumn() {

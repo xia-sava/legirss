@@ -77,12 +77,14 @@ data class MainUiState(
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
 
-    /** 一覧の中で一番古い未読の記事の位置。未読が無ければ null。 */
-    val oldestUnreadIndex: Int?
-        get() = articles.withIndex()
-            .filter { it.value.state == ArticleState.UNREAD }
-            .minByOrNull { it.value.sortAt }
-            ?.index
+    /**
+     * 一覧で一番下にある未読の記事の位置。未読が無ければ null。
+     *
+     * 既定の並びでは未読が新しい順に上へ集まるので、これが読み始める記事（一番古い未読）になる。
+     * 日時が同じ記事が並んでいても迷わないよう、日時ではなく一覧での位置で決める。
+     */
+    val lastUnreadIndex: Int?
+        get() = articles.indexOfLast { it.state == ArticleState.UNREAD }.takeIf { it >= 0 }
 }
 
 /** ←→ のキーで閲覧状況を切り替える順番。 */

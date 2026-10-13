@@ -111,17 +111,17 @@ class MainViewModel(
         }
     }
 
-    /** 一番古い未読の記事を選ぶ。未読が無ければ何もしない。 */
-    fun selectOldestUnread() {
-        mutableState.value.oldestUnreadIndex?.let(::selectArticle)
+    /** 一覧で一番下にある未読の記事を選ぶ。未読が無ければ何もしない。 */
+    fun selectLastUnread() {
+        mutableState.value.lastUnreadIndex?.let(::selectArticle)
     }
 
     /**
-     * 読み進める。記事を選んでいなければ一番古い未読を選び、選んでいれば 1 つ上の行へ進む。
+     * 読み進める。記事を選んでいなければ一番下の未読を選び、選んでいれば 1 つ上の行へ進む。
      */
     override fun readOn() {
         when (val index = mutableState.value.selectedArticleIndex) {
-            null -> selectOldestUnread()
+            null -> selectLastUnread()
             else -> if (index > 0) selectArticle(index - 1)
         }
     }
