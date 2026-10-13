@@ -71,6 +71,15 @@ compose.desktop {
     }
 }
 
+// アプリのアイコンのファイルを、タスクトレイのアイコンと同じ絵から作り直す。絵を変えたときに実行する。
+tasks.register<JavaExec>("generateIcon") {
+    group = "build setup"
+    description = "Regenerates icons/legirss.ico from the tray icon drawing."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "to.sava.legirss.tools.IconFileKt"
+    args(layout.projectDirectory.file("icons/legirss.ico").asFile.absolutePath)
+}
+
 // 開発起動（run）ではデータをビルドディレクトリの下に置き、利用者のデータ領域に触れない。
 val devDataDir = layout.buildDirectory.dir("dev-data")
 tasks.withType<JavaExec>().configureEach {
