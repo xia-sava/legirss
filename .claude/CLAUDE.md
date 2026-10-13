@@ -52,11 +52,35 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 
 - 置き場所は `%APPDATA%\legirss`。開発用の起動（`:desktopApp:run`）だけは
   `desktopApp/build/dev-data` を使い、利用者のデータに触れない
-- スキーマは `Schema.sq` の 1 つだけで、移行の仕組みは無い。**テーブルの定義を変えると、
-  既にあるデータベースが開けなくなる。** 変える必要が出たら、移行の方法を先に決める。
-  問い合わせの追加や変更は自由にできる
+- スキーマは `Schema.sq` に書く。問い合わせの追加や変更は自由にできる。
+  **テーブルの定義を変えるときは、下の「スキーマを変える」の手順で移行のファイルを足す。**
+  足さないと、既にあるデータベースが古い定義のまま開かれて、問い合わせが失敗する
 - 設定は `setting` テーブルに、名前と値の組で持つ。値と文字の対応は、持ち主のクラス
   （`AppSettings` `ScreenLayout` `WindowBounds`）の `toSettings` と `fromSettings` に置く
+
+### スキーマを変える
+
+データベースのファイルには、スキーマの版が記録されている（`PRAGMA user_version`）。アプリが持つ版より
+古ければ、開くときに SQLDelight が移行のファイルを順に実行する。版は、移行のファイルの数に 1 を足した値になる。
+
+1. `Schema.sq` のテーブルの定義を、変えたあとの形に書き換える
+2. いまの版の番号を名前にした移行のファイルを、`Schema.sq` と同じ場所に足す。版 1 から 2 へ上げるなら
+   `1.sqm`。中には、古い定義を新しい定義に変える文（`ALTER TABLE` など）を書く
+3. 新しい版のスキーマの控えを作って、コミットに含める
+
+   ```
+   ./gradlew :shared:generateCommonMainLegirssDatabaseSchema
+   ```
+
+   `shared/src/commonMain/sqldelight/databases/` に `2.db` のような名前でできる
+4. `./gradlew check` を通す。移行のファイルを順に実行した結果が `Schema.sq` と同じ形になることを、
+   `verifyCommonMainLegirssDatabaseMigration` が確かめる
+
+移行の前には、元の状態の複製が `backup\legirss-before-migration-v版.db` に自動で残る。
+日ごとのバックアップとは別のもので、古くなっても消さない。
+
+公開した移行のファイルは書き換えない。利用者のデータベースには実行した結果が残っているので、
+直すときは次の版の移行のファイルを足す。
 
 ## 検証
 
