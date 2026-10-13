@@ -1,7 +1,11 @@
 package to.sava.legirss.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import to.sava.legirss.model.ArticleCount
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.NewArticle
@@ -92,6 +96,35 @@ class LegirssStoreTest {
 
         assertEquals(ArticleCount(total = 2, unread = 1), counts[tree.first { it.name == "Alpha" }.id])
         assertEquals(ArticleCount(total = 1, unread = 0), counts[tree.first { it.name == "Beta" }.id])
+    }
+
+    /** ファイルのデータベースに複数のスレッドから同時に書き込んでも、全ての書き込みが成功する。 */
+    @Test
+    fun acceptsConcurrentWritesToFileDatabase() = runBlocking {
+        val dataDir = Files.createTempDirectory("legirss-store-test")
+        val store = LegirssStore(DatabaseFactory.open(dataDir), Dispatchers.IO)
+        val writers = 40
+
+        (1..writers).map { number ->
+            async(Dispatchers.IO) {
+                store.importNodes(
+                    listOf(
+                        NewChannel(
+                            name = "Channel $number",
+                            feedUrl = "https://example.com/$number",
+                            siteUrl = null,
+                            title = null,
+                            paused = false,
+                            firstFetchAsRead = false,
+                            articles = (1..20).map { article("a$it", ArticleState.UNREAD, it.toLong()) },
+                        ),
+                    ),
+                )
+            }
+        }.awaitAll()
+
+        assertEquals(writers, store.loadTree().size)
+        assertEquals(writers * 20, store.loadArticleRows(channelIds = null).size)
     }
 
     /** チャンネルを指定しなければ全記事を、指定すればそのチャンネルの記事だけを返す。 */

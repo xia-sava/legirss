@@ -1,6 +1,8 @@
 package to.sava.legirss.data
 
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import to.sava.legirss.data.db.LegirssDatabase
 import to.sava.legirss.feed.ParsedFeed
@@ -23,11 +25,21 @@ class LegirssStore(
 ) {
     private val queries get() = database.schemaQueries
 
-    suspend fun isEmpty(): Boolean = withContext(ioDispatcher) {
+    private val accessLock = Mutex()
+
+    /**
+     * データベースへの操作を 1 つずつ順に実行する。
+     *
+     * ドライバはスレッドごとに別の接続を使うので、並行して書き込むと互いにロックして失敗する。
+     */
+    private suspend fun <T> access(block: () -> T): T =
+        withContext(context = ioDispatcher) { accessLock.withLock { block() } }
+
+    suspend fun isEmpty(): Boolean = access {
         queries.countNodes().executeAsOne() == 0L
     }
 
-    suspend fun loadTree(): List<TreeNode> = withContext(ioDispatcher) {
+    suspend fun loadTree(): List<TreeNode> = access {
         queries.selectNodes { id, parentId, position, kind, name, feedUrl, siteUrl, title, paused, errorKind ->
             TreeNode(
                 id = id,
@@ -49,14 +61,14 @@ class LegirssStore(
     }
 
     /** チャンネルのノード ID ごとの記事数。記事の無いチャンネルは含まれない。 */
-    suspend fun loadArticleCounts(): Map<Long, ArticleCount> = withContext(ioDispatcher) {
+    suspend fun loadArticleCounts(): Map<Long, ArticleCount> = access {
         queries.selectArticleCounts { channelId, total, unread ->
             channelId to ArticleCount(total = total.toInt(), unread = unread?.toInt() ?: 0)
         }.executeAsList().toMap()
     }
 
     /** [channelIds] が null なら全チャンネルの記事を返す。 */
-    suspend fun loadArticleRows(channelIds: Collection<Long>?): List<ArticleRow> = withContext(ioDispatcher) {
+    suspend fun loadArticleRows(channelIds: Collection<Long>?): List<ArticleRow> = access {
         when (channelIds) {
             null -> queries.selectArticleRows(::toArticleRow)
             else -> queries.selectArticleRowsByChannels(channelIds, ::toArticleRow)
@@ -64,7 +76,7 @@ class LegirssStore(
     }
 
     /** 購読中のチャンネルを更新の対象として返す。[channelIds] が null でなければ、その中のものに限る。 */
-    suspend fun loadUpdateTargets(channelIds: Collection<Long>?): List<UpdateTarget> = withContext(ioDispatcher) {
+    suspend fun loadUpdateTargets(channelIds: Collection<Long>?): List<UpdateTarget> = access {
         val wanted = channelIds?.toSet()
         queries.selectUpdateTargets { nodeId, feedUrl, etag, lastModified, firstFetchAsRead, goneCount, goneAt ->
             UpdateTarget(nodeId, feedUrl, etag, lastModified, firstFetchAsRead == 1L, goneCount.toInt(), goneAt)
@@ -86,7 +98,7 @@ class LegirssStore(
         etag: String?,
         lastModified: String?,
         now: Long,
-    ): Int = withContext(ioDispatcher) {
+    ): Int = access {
         database.transactionWithResult {
             val channelId = target.channelId
             val registered = queries.selectArticleIdentities(channelId).executeAsList().toSet()
@@ -129,7 +141,7 @@ class LegirssStore(
     }
 
     /** フィードに変更が無かったことを記録する。 */
-    suspend fun recordNotModified(target: UpdateTarget, feedUrl: String, now: Long) = withContext(ioDispatcher) {
+    suspend fun recordNotModified(target: UpdateTarget, feedUrl: String, now: Long) = access {
         queries.recordNotModified(feedUrl, now, target.channelId)
     }
 
@@ -142,16 +154,16 @@ class LegirssStore(
         goneAt: Long?,
         paused: Boolean,
         now: Long,
-    ) = withContext(ioDispatcher) {
+    ) = access {
         queries.recordFetchFailure(now, error.code, detail, goneCount.toLong(), goneAt, if (paused) 1L else 0L, target.channelId)
     }
 
-    suspend fun setArticleState(articleId: Long, state: ArticleState) = withContext(ioDispatcher) {
+    suspend fun setArticleState(articleId: Long, state: ArticleState) = access {
         queries.updateArticleState(state.code, articleId)
     }
 
     /** 記事を削除する。フィードに残っていても登録し直されないよう、識別子を控えておく。 */
-    suspend fun deleteArticle(articleId: Long, now: Long) = withContext(ioDispatcher) {
+    suspend fun deleteArticle(articleId: Long, now: Long) = access {
         database.transaction {
             queries.rememberDeletedArticle(now, articleId)
             queries.deleteArticle(articleId)
@@ -159,7 +171,7 @@ class LegirssStore(
     }
 
     /** [nodes] を最上位に登録する。 */
-    suspend fun importNodes(nodes: List<NewNode>) = withContext(ioDispatcher) {
+    suspend fun importNodes(nodes: List<NewNode>) = access {
         database.transaction { insertNodes(parentId = null, nodes) }
     }
 

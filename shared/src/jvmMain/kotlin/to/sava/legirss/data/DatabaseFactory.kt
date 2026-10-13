@@ -8,6 +8,7 @@ import java.util.Properties
 
 object DatabaseFactory {
     private const val DATABASE_FILE_NAME = "legirss.db"
+    private const val BUSY_TIMEOUT_MILLIS = 5_000
 
     /** [dataDir] の下のデータベースを開く。無ければ作る。 */
     fun open(dataDir: Path): LegirssDatabase {
@@ -18,7 +19,11 @@ object DatabaseFactory {
     fun openInMemory(): LegirssDatabase = open(JdbcSqliteDriver.IN_MEMORY)
 
     private fun open(url: String): LegirssDatabase {
-        val properties = Properties().apply { setProperty("foreign_keys", "true") }
+        val properties = Properties().apply {
+            setProperty("foreign_keys", "true")
+            // 別のプロセスがファイルを使っている間は、すぐに失敗させずに待つ。
+            setProperty("busy_timeout", BUSY_TIMEOUT_MILLIS.toString())
+        }
         return LegirssDatabase(JdbcSqliteDriver(url, properties, LegirssDatabase.Schema))
     }
 }
