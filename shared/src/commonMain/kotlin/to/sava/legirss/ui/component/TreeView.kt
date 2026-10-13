@@ -3,6 +3,7 @@ package to.sava.legirss.ui.component
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,6 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -100,18 +110,25 @@ private const val EDGE_FRACTION = 0.25f
 private const val HALF = 0.5f
 
 /**
+ * @param onSelect 行をクリックして選んだ。
+ * @param onKeySelect キー操作で選択を別の行へ動かした。
  * @param onContextMenu 行を右クリックしたときに、その行と、押した位置（このツリーの左上からの距離）を伝える。
  * @param onMove 行をドラッグして別の行へ落としたときに、動かした行、落とした先の行、置く場所を伝える。
+ * @param onDelete 行を選んだ状態で Delete を押した。
+ * @param focusRequester このツリーにフォーカスを移すためのもの。
  */
 @Composable
 fun <K : Any> TreeView(
     rows: List<TreeRow<K>>,
     selectedKey: K?,
     onSelect: (K) -> Unit,
+    onKeySelect: (K) -> Unit,
     onToggle: (K) -> Unit,
     onContextMenu: (K, IntOffset) -> Unit,
     onMove: (source: K, target: K, place: TreeDropPlace) -> Unit,
+    onDelete: (K) -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester = remember { FocusRequester() },
 ) {
     val style = LocalLegirssStyle.current
     val listState = rememberLazyListState()
@@ -120,7 +137,37 @@ fun <K : Any> TreeView(
     val currentOnContextMenu by rememberUpdatedState(onContextMenu)
     val currentOnMove by rememberUpdatedState(onMove)
     var drag by remember { mutableStateOf<TreeDrag<K>?>(null) }
+    var focused by remember { mutableStateOf(false) }
     val rowHeight = style.treeRowHeight
+    val selectedIndex = rows.indexOfFirst { it.key == selectedKey }
+
+    // キー操作で選択が表示範囲の外へ移ったら、選択した行が見えるように送る。
+    LaunchedEffect(selectedIndex) {
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val fullyVisible = visible.any { it.index == selectedIndex && it.offset >= 0 && it.offset + it.size <= listState.layoutInfo.viewportSize.height }
+        if (focused && selectedIndex >= 0 && visible.isNotEmpty() && !fullyVisible) listState.scrollToItem(selectedIndex)
+    }
+
+    fun handleKey(key: Key): Boolean {
+        val row = rows.getOrNull(selectedIndex)
+        fun selectAt(index: Int) = rows.getOrNull(index.coerceIn(0, rows.lastIndex))?.let { onKeySelect(it.key) }
+        when (key) {
+            Key.DirectionUp -> selectAt(selectedIndex - 1)
+            Key.DirectionDown -> selectAt(selectedIndex + 1)
+            Key.MoveHome -> selectAt(0)
+            Key.MoveEnd -> selectAt(rows.lastIndex)
+            // 開いていれば閉じ、閉じていれば親の行へ移る。
+            Key.DirectionLeft -> when {
+                row == null -> Unit
+                row.expandable && row.expanded -> onToggle(row.key)
+                else -> rows.take(selectedIndex).lastOrNull { it.depth < row.depth }?.let { onKeySelect(it.key) }
+            }
+            Key.DirectionRight -> row?.takeIf { it.expandable && !it.expanded }?.let { onToggle(it.key) }
+            Key.Delete -> row?.let { onDelete(it.key) }
+            else -> return false
+        }
+        return true
+    }
 
     // 行の高さは一定なので、押した位置とスクロールの量から行を求める。戻り値は、行の番号と、行の中での上端からの割合。
     fun rowAt(y: Float, rowHeightPx: Int): Pair<Int, Float> {
@@ -162,12 +209,22 @@ fun <K : Any> TreeView(
             onDragCancel = { drag = null },
         )
     }
-    Box(modifier.background(style.colors.background).then(contextMenuDetector).then(dragDetector)) {
+    Box(
+        modifier
+            .background(style.colors.background)
+            .onFocusChanged { focused = it.hasFocus }
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { event -> event.type == KeyEventType.KeyDown && rows.isNotEmpty() && handleKey(event.key) }
+            .then(contextMenuDetector)
+            .then(dragDetector),
+    ) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(rows, key = { it.key }) { row ->
                 TreeRowView(
                     row = row,
                     selected = row.key == selectedKey,
+                    focused = focused,
                     dropPlace = drag?.takeIf { it.target == row.key && it.source != row.key }?.place,
                     onSelect = onSelect,
                     onToggle = onToggle,
@@ -197,6 +254,7 @@ private fun dropPlaceOf(row: TreeRow<*>, fraction: Float): TreeDropPlace {
 private fun <K : Any> TreeRowView(
     row: TreeRow<K>,
     selected: Boolean,
+    focused: Boolean,
     dropPlace: TreeDropPlace?,
     onSelect: (K) -> Unit,
     onToggle: (K) -> Unit,
@@ -205,7 +263,8 @@ private fun <K : Any> TreeRowView(
     val colors = style.colors
     val background = when {
         dropPlace == TreeDropPlace.INTO -> colors.hover
-        selected -> colors.selection
+        selected && focused -> colors.selection
+        selected -> colors.selectionInactive
         else -> Color.Transparent
     }
     Row(

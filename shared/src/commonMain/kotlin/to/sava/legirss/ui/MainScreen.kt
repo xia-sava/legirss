@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
@@ -20,14 +22,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import to.sava.legirss.model.ArticleRow
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.DataTable
@@ -63,6 +78,10 @@ private val STATE_ICON_SIZE = 9.dp
 private val ARTICLE_PANE_PADDING = 8.dp
 private val SCROLLBAR_WIDTH = 10.dp
 private val ARTICLE_TITLE_EXTRA_SIZE = 3.sp
+private val ARTICLE_LINE_SCROLL = 40.dp
+
+// PageUp と PageDown で送る量。読んでいた位置を見失わないよう、表示範囲より少し短くする。
+private const val ARTICLE_PAGE_FRACTION = 0.85f
 
 private const val UPDATE_ALL_LABEL = "更新"
 private const val UPDATE_SELECTED_LABEL = "選択更新"
@@ -109,13 +128,21 @@ private fun MainContent(
     onLayoutChange: (ScreenLayout) -> Unit,
 ) {
     val style = LocalLegirssStyle.current
-    Column(Modifier.fillMaxSize().background(style.colors.panel)) {
+    val panes = remember { PaneFocus() }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(style.colors.panel)
+            .onPreviewKeyEvent { event ->
+                (event.type == KeyEventType.KeyDown && event.key == Key.F6).also { if (it) panes.moveOn(forward = !event.isShiftPressed) }
+            },
+    ) {
         Toolbar(state, actions)
         HorizontalSplit(
             firstWidth = layout.treeWidth,
             onFirstWidthChange = { onLayoutChange(layout.copy(treeWidth = it)) },
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            first = { TreePane(state, actions) },
+            first = { TreePane(state, actions, panes) },
             second = {
                 VerticalSplit(
                     firstHeight = layout.listHeight,
@@ -127,9 +154,10 @@ private fun MainContent(
                             actions = actions,
                             columnWidths = layout.columnWidths,
                             onColumnResize = { column, width -> onLayoutChange(layout.withColumnWidth(column, width)) },
+                            panes = panes,
                         )
                     },
-                    second = { ArticlePane(state, actions, articleScroll) },
+                    second = { ArticlePane(state, actions, articleScroll, panes) },
                 )
             },
         )
@@ -137,23 +165,58 @@ private fun MainContent(
     }
 }
 
+/** フォーカスを置ける領域。F6 でこの順にたどる。 */
+private enum class Pane {
+    TREE,
+    LIST,
+    ARTICLE,
+}
+
+/** どの領域にフォーカスがあるかを覚え、領域の間でフォーカスを移す。 */
+@Stable
+private class PaneFocus {
+    private val requesters = Pane.entries.associateWith { FocusRequester() }
+    private var current = Pane.LIST
+
+    fun requesterOf(pane: Pane): FocusRequester = requesters.getValue(pane)
+
+    fun focus(pane: Pane) {
+        requesterOf(pane).requestFocus()
+    }
+
+    /** [pane] の領域に付けて、そこへフォーカスが入ったことを覚える。 */
+    fun track(pane: Pane): Modifier = Modifier.onFocusChanged { if (it.hasFocus) current = pane }
+
+    /** いまの領域の次（[forward] が false なら前）の領域へフォーカスを移す。 */
+    fun moveOn(forward: Boolean) {
+        focus(Pane.entries[(current.ordinal + if (forward) 1 else -1).mod(Pane.entries.size)])
+    }
+}
+
 /** ツリーと、行を右クリックしたときのメニュー。 */
 @Composable
-private fun TreePane(state: MainUiState, actions: MainActions) {
+private fun TreePane(state: MainUiState, actions: MainActions, panes: PaneFocus) {
     // メニューを出している行と、出す位置。出していなければ null。
     var menu by remember { mutableStateOf<Pair<NodeSelection, IntOffset>?>(null) }
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().then(panes.track(Pane.TREE))) {
         TreeView(
             rows = state.treeRows,
             selectedKey = state.selectedNode,
-            onSelect = actions::selectNode,
+            // クリックで選んだあとは、キーですぐ読み始められるようフォーカスを一覧に置く。
+            onSelect = { key ->
+                actions.selectNode(key)
+                panes.focus(Pane.LIST)
+            },
+            onKeySelect = actions::selectNode,
             onToggle = actions::toggleNode,
             onContextMenu = { key, position ->
                 actions.selectNode(key)
                 menu = key to position
             },
             onMove = actions::moveNode,
+            onDelete = actions::requestDelete,
             modifier = Modifier.fillMaxSize(),
+            focusRequester = panes.requesterOf(Pane.TREE),
         )
         menu?.let { (key, position) ->
             state.treeRows.firstOrNull { it.key == key }?.let { row ->
@@ -218,9 +281,10 @@ private fun ArticleTable(
     actions: MainActions,
     columnWidths: Map<ArticleColumn, Dp>,
     onColumnResize: (ArticleColumn, Dp) -> Unit,
+    panes: PaneFocus,
 ) {
     val colors = LocalLegirssStyle.current.colors
-    val focusRequester = remember { FocusRequester() }
+    val focusRequester = panes.requesterOf(Pane.LIST)
 
     // 起動した直後と、しまっていたウィンドウを出した直後に、キーですぐ読み始められるようフォーカスを一覧に置く。
     // 一覧が画面に組み込まれた後に実行されるよう、一覧と同じ場所で行う。
@@ -244,7 +308,7 @@ private fun ArticleTable(
         onColumnClick = actions::sortBy,
         onColumnResize = onColumnResize,
         centerSelection = true,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
         focusRequester = focusRequester,
     ) { article, column ->
         val unread = article.state == ArticleState.UNREAD
@@ -268,16 +332,43 @@ private fun DrawScope.drawStateIcon(state: ArticleState, colors: LegirssColors) 
     }
 }
 
-/** 選んでいる記事の、タイトル・日付とチャンネル名・本文を上から順に出す。 */
+/**
+ * 選んでいる記事の、タイトル・日付とチャンネル名・本文を上から順に出す。
+ *
+ * フォーカスがあるときは、↑↓ PageUp PageDown Home End で本文を送れる。
+ */
 @Composable
-private fun ArticlePane(state: MainUiState, actions: MainActions, scroll: ScrollState) {
+private fun ArticlePane(state: MainUiState, actions: MainActions, scroll: ScrollState, panes: PaneFocus) {
     val style = LocalLegirssStyle.current
     val article = state.selectedArticle
+    val scope = rememberCoroutineScope()
+    val lineScrollPx = with(LocalDensity.current) { ARTICLE_LINE_SCROLL.toPx() }
 
     // 別の記事を選んだら、先頭から読めるようにスクロール位置を戻す。
     LaunchedEffect(article?.id) { scroll.scrollTo(0) }
 
-    Row(Modifier.fillMaxSize().background(style.colors.background)) {
+    Row(
+        Modifier
+            .fillMaxSize()
+            .background(style.colors.background)
+            .then(panes.track(Pane.ARTICLE))
+            .focusRequester(panes.requesterOf(Pane.ARTICLE))
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val delta = when (event.key) {
+                    Key.DirectionUp -> -lineScrollPx
+                    Key.DirectionDown -> lineScrollPx
+                    Key.PageUp -> -scroll.viewportSize * ARTICLE_PAGE_FRACTION
+                    Key.PageDown -> scroll.viewportSize * ARTICLE_PAGE_FRACTION
+                    Key.MoveHome -> -scroll.maxValue.toFloat()
+                    Key.MoveEnd -> scroll.maxValue.toFloat()
+                    else -> return@onKeyEvent false
+                }
+                scope.launch { scroll.scrollBy(delta) }
+                true
+            },
+    ) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(ARTICLE_PANE_PADDING)) {
             if (article == null) return@Column
             BasicText(
