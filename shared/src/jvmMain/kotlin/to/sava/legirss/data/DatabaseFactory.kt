@@ -23,6 +23,9 @@ object DatabaseFactory {
             setProperty("foreign_keys", "true")
             // 別のプロセスがファイルを使っている間は、すぐに失敗させずに待つ。
             setProperty("busy_timeout", BUSY_TIMEOUT_MILLIS.toString())
+            // トランザクションは始めた時点で書き込みのロックを取る。読んでから書く段階でロックを
+            // 取りにいくと、ほかの書き込みと重なったときに待たずに失敗する。
+            setProperty("transaction_mode", "IMMEDIATE")
         }
         return LegirssDatabase(JdbcSqliteDriver(url, properties, LegirssDatabase.Schema))
     }
