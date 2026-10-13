@@ -3,10 +3,14 @@ package to.sava.legirss
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Dimension
+import java.awt.Graphics
+import java.awt.Graphics2D
 import java.awt.Insets
 import java.awt.MouseInfo
+import java.awt.Rectangle
 import java.awt.RenderingHints
 import java.awt.SystemTray
+import java.awt.Toolkit
 import java.awt.TrayIcon
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -19,9 +23,61 @@ import javax.swing.JCheckBoxMenuItem
 import javax.swing.JDialog
 import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
+import javax.swing.UIManager
 import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
+import javax.swing.plaf.basic.BasicCheckBoxMenuItemUI
+import javax.swing.plaf.basic.BasicMenuItemUI
 import kotlin.math.roundToInt
+
+private class CenteredMenuItemUI : BasicMenuItemUI() {
+    override fun paintText(graphics: Graphics, menuItem: JMenuItem, textRect: Rectangle, text: String) {
+        drawVisuallyCentered(graphics, menuItem, textRect, text, selectionForeground, disabledForeground)
+    }
+}
+
+private class CenteredCheckBoxMenuItemUI : BasicCheckBoxMenuItemUI() {
+    override fun paintText(graphics: Graphics, menuItem: JMenuItem, textRect: Rectangle, text: String) {
+        drawVisuallyCentered(graphics, menuItem, textRect, text, selectionForeground, disabledForeground)
+    }
+}
+
+// 文字の見た目の高さを測るのに使う字。漢字の字面は、かなや英字より安定して枠いっぱいに近い。
+private const val REFERENCE_GLYPH = "国"
+
+// 画面の文字描画の設定（アンチエイリアスの方式など）を持つデスクトップのプロパティ。
+private const val DESKTOP_FONT_HINTS = "awt.font.desktophints"
+
+// 選べない項目の文字色。項目用の色が定義されていない見た目のときに使う。
+private const val INACTIVE_TEXT_COLOR_KEY = "textInactiveText"
+
+/**
+ * 文字の見た目の中心が、項目の高さのちょうど半分に来るように描く。
+ *
+ * 標準の配置は、フォントが持つ行の箱（上端から下端まで）を中央に置く。上側に広い余白を持つフォントでは、
+ * そのままだと文字が下に寄って見えるので、字面の位置から描く位置を決める。
+ */
+private fun drawVisuallyCentered(
+    graphics: Graphics,
+    menuItem: JMenuItem,
+    textRect: Rectangle,
+    text: String,
+    selectionForeground: Color?,
+    disabledForeground: Color?,
+) {
+    val graphics2D = graphics as Graphics2D
+    (Toolkit.getDefaultToolkit().getDesktopProperty(DESKTOP_FONT_HINTS) as? Map<*, *>)?.let(graphics2D::addRenderingHints)
+    graphics2D.font = menuItem.font
+    graphics2D.color = when {
+        !menuItem.model.isEnabled -> disabledForeground ?: UIManager.getColor(INACTIVE_TEXT_COLOR_KEY) ?: Color.GRAY
+        menuItem.model.isArmed -> selectionForeground ?: menuItem.foreground
+        else -> menuItem.foreground
+    }
+    // 字面の中心は、ベースラインを 0 とした位置（下向きが正）で求まる。
+    val glyphCenter = menuItem.font.createGlyphVector(graphics2D.fontRenderContext, REFERENCE_GLYPH).visualBounds.centerY
+    val baseline = menuItem.height / 2.0 - glyphCenter
+    graphics2D.drawString(text, textRect.x.toFloat(), baseline.toFloat())
+}
 
 /** タスクトレイのアイコンで表す状態。色で見分ける。 */
 enum class TrayState(val color: Color) {
@@ -132,9 +188,11 @@ class TrayController(
 
     /** 項目の高さを文字の高さに合わせて決め、選ばれたときの動作を付ける。 */
     private fun <T : JMenuItem> menuItem(item: T, onSelect: () -> Unit): T = item.apply {
-        // 既定の上下の余白を外してから高さを決める。残したままだと文字が行の中央に来ない。
-        margin = Insets(0, margin.left, 0, margin.right)
-        border = BorderFactory.createEmptyBorder(0, border.getBorderInsets(this).left, 0, border.getBorderInsets(this).right)
+        // OS の見た目に合わせた描画は、文字の位置を OS の決めた余白で置くので、行を詰めると文字が下に寄る。
+        // 文字を行の上下中央に置く描画に替え、上下の余白も外す。
+        setUI(if (this is JCheckBoxMenuItem) CenteredCheckBoxMenuItemUI() else CenteredMenuItemUI())
+        margin = Insets(0, MENU_ITEM_SIDE_PADDING, 0, MENU_ITEM_SIDE_PADDING)
+        border = BorderFactory.createEmptyBorder()
         val textHeight = getFontMetrics(font).height
         preferredSize = Dimension(preferredSize.width, (textHeight * MENU_ITEM_HEIGHT_RATIO).roundToInt())
         addActionListener { onSelect() }
@@ -149,6 +207,7 @@ class TrayController(
 
         // メニューの 1 行の高さを、文字の高さの何倍にするか。
         private const val MENU_ITEM_HEIGHT_RATIO = 1.2
+        private const val MENU_ITEM_SIDE_PADDING = 8
 
         private const val ICON_SIZE = 32
 
