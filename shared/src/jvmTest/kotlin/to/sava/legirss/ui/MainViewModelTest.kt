@@ -235,23 +235,21 @@ class MainViewModelTest {
         assertEquals(2, viewModel.state.value.selectedArticleIndex)
         assertEquals(ArticleCount(total = 4, unread = 3), viewModel.state.value.selectedNodeCount)
         assertEquals("更新しました  新着 1 件", viewModel.state.value.statusMessage)
-        assertEquals(false, viewModel.state.value.unseenNewArticles)
     }
 
-    /** ウィンドウをしまっている間の定期更新で新着があれば印を立てる。表示すると印が消え、一覧が並べ直される。 */
+    /** ウィンドウをしまっている間の定期更新では、全体の未読数に新着が加わる。表示すると一覧が並べ直され、フォーカスの要求が出る。 */
     @Test
-    fun flagsNewArticlesWhileHiddenUntilShown() = runTest(UnconfinedTestDispatcher()) {
+    fun rearrangesListWhenShownAfterUpdateWhileHidden() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
         viewModel.setWindowVisible(false)
         feedBody = freshFeed
 
         viewModel.updateAutomatically().join()
-        val flaggedWhileHidden = viewModel.state.value.unseenNewArticles
+        val unreadWhileHidden = viewModel.state.value.totalCount.unread
         val focusRequestBefore = viewModel.state.value.listFocusRequest
         viewModel.setWindowVisible(true)
 
-        assertEquals(true, flaggedWhileHidden)
-        assertEquals(false, viewModel.state.value.unseenNewArticles)
+        assertEquals(3, unreadWhileHidden)
         assertEquals(focusRequestBefore + 1, viewModel.state.value.listFocusRequest)
         assertEquals(listOf("fresh", "newer", "older", "read"), viewModel.titles)
         assertNull(viewModel.state.value.selectedArticleIndex)

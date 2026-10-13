@@ -2,6 +2,8 @@ package to.sava.legirss
 
 import java.awt.BasicStroke
 import java.awt.Color
+import java.awt.Dimension
+import java.awt.Insets
 import java.awt.MouseInfo
 import java.awt.RenderingHints
 import java.awt.SystemTray
@@ -19,13 +21,17 @@ import javax.swing.JMenuItem
 import javax.swing.JPopupMenu
 import javax.swing.event.PopupMenuEvent
 import javax.swing.event.PopupMenuListener
+import kotlin.math.roundToInt
 
-enum class TrayState {
-    NORMAL,
-    UPDATING,
+/** タスクトレイのアイコンで表す状態。色で見分ける。 */
+enum class TrayState(val color: Color) {
+    /** 未読が無い。 */
+    NORMAL(Color(0x3F, 0xA9, 0x4B)),
 
-    /** ウィンドウをしまっている間に新着があった。 */
-    NEW_ARTICLES,
+    /** 未読がある。 */
+    UNREAD(Color(0xF0, 0x8A, 0x24)),
+
+    UPDATING(Color(0x2B, 0x7C, 0xD3)),
 }
 
 /**
@@ -124,9 +130,13 @@ class TrayController(
         }
     }
 
-    /** 項目の上下左右に余白を足し、選ばれたときの動作を付ける。 */
+    /** 項目の高さを文字の高さに合わせて決め、選ばれたときの動作を付ける。 */
     private fun <T : JMenuItem> menuItem(item: T, onSelect: () -> Unit): T = item.apply {
-        border = BorderFactory.createCompoundBorder(border, MENU_ITEM_PADDING)
+        // 既定の上下の余白を外してから高さを決める。残したままだと文字が行の中央に来ない。
+        margin = Insets(0, margin.left, 0, margin.right)
+        border = BorderFactory.createEmptyBorder(0, border.getBorderInsets(this).left, 0, border.getBorderInsets(this).right)
+        val textHeight = getFontMetrics(font).height
+        preferredSize = Dimension(preferredSize.width, (textHeight * MENU_ITEM_HEIGHT_RATIO).roundToInt())
         addActionListener { onSelect() }
     }
 
@@ -137,30 +147,22 @@ class TrayController(
         private const val STARTUP_LABEL = "Windows の起動時に開始する"
         private const val EXIT_LABEL = "終了"
 
-        private val MENU_ITEM_PADDING = BorderFactory.createEmptyBorder(4, 6, 4, 14)
+        // メニューの 1 行の高さを、文字の高さの何倍にするか。
+        private const val MENU_ITEM_HEIGHT_RATIO = 1.2
 
         private const val ICON_SIZE = 32
-        private val NORMAL_COLOR = Color(0xF0, 0x8A, 0x24)
-        private val UPDATING_COLOR = Color(0x2B, 0x7C, 0xD3)
-        private val BADGE_COLOR = Color(0xD1, 0x34, 0x38)
 
-        /** 角の丸い四角に、電波を表す点と弧を描く。新着ありの状態では右上に丸い印を重ねる。 */
+        /** 状態ごとの色で塗った角の丸い四角に、電波を表す点と弧を描く。 */
         internal fun drawIcon(state: TrayState): BufferedImage = BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB).apply {
             createGraphics().run {
                 setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-                color = if (state == TrayState.UPDATING) UPDATING_COLOR else NORMAL_COLOR
+                color = state.color
                 fillRoundRect(1, 1, 30, 30, 8, 8)
                 color = Color.WHITE
                 fillOval(6, 21, 6, 6)
                 stroke = BasicStroke(3.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
                 draw(Arc2D.Double(-1.0, 14.0, 20.0, 20.0, 0.0, 90.0, Arc2D.OPEN))
                 draw(Arc2D.Double(-8.0, 7.0, 34.0, 34.0, 0.0, 90.0, Arc2D.OPEN))
-                if (state == TrayState.NEW_ARTICLES) {
-                    color = Color.WHITE
-                    fillOval(17, 0, 15, 15)
-                    color = BADGE_COLOR
-                    fillOval(19, 2, 11, 11)
-                }
                 dispose()
             }
         }

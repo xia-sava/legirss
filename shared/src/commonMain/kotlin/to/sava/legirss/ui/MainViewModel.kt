@@ -186,13 +186,13 @@ class MainViewModel(
     /**
      * ウィンドウを表示したか、しまったかを伝える。
      *
-     * 表示したときは一覧を並べ直して選択を外し、一覧にフォーカスを置く。新着の印も消す。
+     * 表示したときは一覧を並べ直して選択を外し、一覧にフォーカスを置く。
      */
     fun setWindowVisible(visible: Boolean) {
         if (windowVisible == visible) return
         windowVisible = visible
         if (!visible) return
-        mutableState.update { it.copy(unseenNewArticles = false, listFocusRequest = it.listFocusRequest + 1) }
+        mutableState.update { it.copy(listFocusRequest = it.listFocusRequest + 1) }
         scope.launch { reload() }
     }
 
@@ -208,12 +208,7 @@ class MainViewModel(
         mutableState.update { it.copy(statusMessage = null) }
         try {
             val result = updater.update(if (allChannels) null else tree.channelIdsUnder(mutableState.value.selectedNode))
-            mutableState.update {
-                it.copy(
-                    statusMessage = summaryOf(result),
-                    unseenNewArticles = it.unseenNewArticles || (!windowVisible && result.newArticles > 0),
-                )
-            }
+            mutableState.update { it.copy(statusMessage = summaryOf(result)) }
         } catch (cancellation: CancellationException) {
             mutableState.update { it.copy(statusMessage = UPDATE_CANCELLED_MESSAGE) }
             throw cancellation

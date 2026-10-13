@@ -92,7 +92,7 @@ fun main(args: Array<String>) {
             ).also(TrayController::install)
         }
         DisposableEffect(Unit) { onDispose(tray::remove) }
-        LaunchedEffect(state.updateProgress != null, state.unseenNewArticles, state.totalCount.unread) {
+        LaunchedEffect(state.updateProgress != null, state.totalCount.unread) {
             tray.update(trayStateOf(state), "$APP_NAME  未読 ${state.totalCount.unread} 件")
         }
 
@@ -137,7 +137,7 @@ fun main(args: Array<String>) {
 
 private fun trayStateOf(state: MainUiState): TrayState = when {
     state.updateProgress != null -> TrayState.UPDATING
-    state.unseenNewArticles -> TrayState.NEW_ARTICLES
+    state.totalCount.unread > 0 -> TrayState.UNREAD
     else -> TrayState.NORMAL
 }
 
