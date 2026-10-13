@@ -60,7 +60,7 @@ fun MainActions.handleKey(
         event.key == Key.F2 && event.isAltPressed -> updateSelected()
         event.key == Key.F2 -> updateAll()
         event.key == Key.K && event.isCtrlPressed -> cycleFilter()
-        // 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の記事へ進む。
+        // 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の未読へ進む。
         event.key == Key.Spacebar && plain -> when {
             hasSelectedArticle -> scope.launch { if (!articleScroll.pageDown()) readOn() }
             else -> readOn()

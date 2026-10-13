@@ -130,7 +130,7 @@ class MainViewModelTest {
         assertEquals(ArticleState.READ, storedStates()["newer"])
     }
 
-    /** 記事を選んでいないときに読み進めると一番古い未読を選び、続けると 1 つ上の行へ進む。先頭では止まる。 */
+    /** 読み進めると一番下の未読を選び、続けると残った未読を下から順にたどる。未読が無くなったら動かない。 */
     @Test
     fun readsOnFromLastUnreadUpwards() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
@@ -145,6 +145,31 @@ class MainViewModelTest {
         assertEquals("newer", second)
         assertEquals(0, viewModel.state.value.selectedArticleIndex)
         assertEquals(ArticleCount(total = 3, unread = 0), viewModel.state.value.selectedNodeCount)
+    }
+
+    /** 選んでいる行より下に未読が残っていれば、読み進めたときにそちらへ移る。 */
+    @Test
+    fun readsOnToUnreadBelowSelection() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(0)
+
+        viewModel.readOn()
+
+        assertEquals("older", viewModel.state.value.selectedArticle?.title)
+        assertEquals(1, viewModel.state.value.selectedArticleIndex)
+    }
+
+    /** 読み進めるときは既読の行を通らず、離れた位置にある未読へ直接移る。 */
+    @Test
+    fun readsOnSkippingReadRows() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(1)
+        viewModel.selectArticle(2)
+
+        viewModel.readOn()
+
+        assertEquals("newer", viewModel.state.value.selectedArticle?.title)
+        assertEquals(0, viewModel.state.value.selectedArticleIndex)
     }
 
     /** 選んでいる記事の閲覧状況を、既読 → 保護 → 未読 の順と、その逆順に切り替えられる。 */

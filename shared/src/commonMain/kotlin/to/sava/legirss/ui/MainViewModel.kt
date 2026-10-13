@@ -111,19 +111,13 @@ class MainViewModel(
         }
     }
 
-    /** 一覧で一番下にある未読の記事を選ぶ。未読が無ければ何もしない。 */
-    fun selectLastUnread() {
-        mutableState.value.lastUnreadIndex?.let(::selectArticle)
-    }
-
     /**
-     * 読み進める。記事を選んでいなければ一番下の未読を選び、選んでいれば 1 つ上の行へ進む。
+     * 読み進める。一覧で一番下にある未読の記事を選ぶ。未読が無ければ何もしない。
+     *
+     * 選んだ記事は既読になるので、繰り返すと未読を下から順にたどることになる。
      */
     override fun readOn() {
-        when (val index = mutableState.value.selectedArticleIndex) {
-            null -> selectLastUnread()
-            else -> if (index > 0) selectArticle(index - 1)
-        }
+        mutableState.value.lastUnreadIndex?.let(::selectArticle)
     }
 
     /** 選んでいる記事の閲覧状況を 未読 → 既読 → 保護 の順（[forward] が false なら逆順）で切り替える。 */
