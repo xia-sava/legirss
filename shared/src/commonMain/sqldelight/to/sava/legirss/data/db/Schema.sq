@@ -1,0 +1,98 @@
+-- ツリーのノード。kind は 0=グループ 1=チャンネル。parent_id が NULL のノードが最上位。
+CREATE TABLE node (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_id INTEGER REFERENCES node(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    kind INTEGER NOT NULL,
+    name TEXT NOT NULL
+);
+
+CREATE INDEX node_parent ON node(parent_id, position);
+
+-- チャンネルの付帯情報。node と 1 対 1。
+CREATE TABLE channel (
+    node_id INTEGER PRIMARY KEY REFERENCES node(id) ON DELETE CASCADE,
+    feed_url TEXT NOT NULL,
+    site_url TEXT,
+    title TEXT,
+    paused INTEGER NOT NULL DEFAULT 0,
+    etag TEXT,
+    last_modified TEXT,
+    fetched_at INTEGER,
+    error_kind INTEGER NOT NULL DEFAULT 0,
+    error_detail TEXT,
+    gone_count INTEGER NOT NULL DEFAULT 0,
+    gone_at INTEGER
+);
+
+-- 記事。state は 0=未読 1=既読 2=保護。時刻は UTC のエポックミリ秒。
+CREATE TABLE article (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id INTEGER NOT NULL REFERENCES channel(node_id) ON DELETE CASCADE,
+    identity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    link TEXT,
+    summary TEXT,
+    content TEXT,
+    author TEXT,
+    category TEXT,
+    published_at INTEGER,
+    sort_at INTEGER NOT NULL,
+    state INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (channel_id, identity)
+);
+
+CREATE INDEX article_channel_sort ON article(channel_id, sort_at);
+
+-- 整理・削除した記事の識別子。フィードに残っている記事が新着として戻るのを防ぐ。
+CREATE TABLE seen (
+    channel_id INTEGER NOT NULL REFERENCES channel(node_id) ON DELETE CASCADE,
+    identity TEXT NOT NULL,
+    seen_at INTEGER NOT NULL,
+    PRIMARY KEY (channel_id, identity)
+);
+
+CREATE TABLE setting (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+selectNodes:
+SELECT node.id, node.parent_id, node.position, node.kind, node.name,
+       channel.feed_url, channel.site_url, channel.title, channel.paused, channel.error_kind
+FROM node
+LEFT JOIN channel ON channel.node_id = node.id
+ORDER BY node.parent_id, node.position;
+
+countNodes:
+SELECT COUNT(*) FROM node;
+
+insertNode:
+INSERT INTO node (parent_id, position, kind, name)
+VALUES (?, ?, ?, ?);
+
+insertChannel:
+INSERT INTO channel (node_id, feed_url, site_url, title, paused)
+VALUES (?, ?, ?, ?, ?);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+insertArticle:
+INSERT OR IGNORE INTO article
+    (channel_id, identity, title, link, summary, content, author, category, published_at, sort_at, state)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectArticleRows:
+SELECT id, channel_id, title, link, author, category, published_at, sort_at, state
+FROM article;
+
+selectArticleRowsByChannels:
+SELECT id, channel_id, title, link, author, category, published_at, sort_at, state
+FROM article
+WHERE channel_id IN ?;
+
+selectArticleCounts:
+SELECT channel_id, COUNT(*) AS total, SUM(state = 0) AS unread
+FROM article
+GROUP BY channel_id;
