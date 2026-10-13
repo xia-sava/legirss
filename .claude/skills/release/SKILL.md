@@ -52,9 +52,18 @@ git push origin v0.2.1
 ```
 gh run list --workflow release.yml --limit 1
 gh run watch <run の ID> --exit-status
+gh run view <run の ID> --json status,conclusion,headSha,jobs
 ```
 
 `Release` ワークフローが走る（10 分ほど）。成功すると 2 つのリリースができている。
+
+ワークフローの終わりを待つときは、次のようにする。main を push したあとの CI を待つときも同じ。
+
+- **待つのはバックグラウンドで行う。** `gh run watch` を前面で流して、終わるまで手を止めない
+- **結果は `gh run view` の中身で確かめる。** `status` が `completed`、`conclusion` が `success`、
+  `headSha` が push したコミットであることと、ジョブごとの `conclusion` を見る
+- **`gh run watch` の終了コードや、出力の末尾だけで判断しない。** `gh run watch` は、実行が続いていても
+  途中で失敗して終わることがある。出力の末尾は、注釈の行（非推奨の警告など）で終わるので、成否が読み取れない
 
 - **`v0.2.1`** … 版ごとの記録。配布物の実物が残るので、どの版で何を配ったかを後から辿れる
 - **`latest`** … 更新の経路。インストール済みのアプリは、ここからマニフェストと配布物を取得する
