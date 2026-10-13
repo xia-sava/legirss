@@ -80,11 +80,6 @@ fun MainScreen(state: MainUiState, actions: MainActions, modifier: Modifier = Mo
     var treeWidth by remember { mutableStateOf(DEFAULT_TREE_WIDTH) }
     var listHeight by remember { mutableStateOf(DEFAULT_LIST_HEIGHT) }
     val columnWidths = remember { mutableStateMapOf<ArticleColumn, Dp>().apply { putAll(DEFAULT_COLUMN_WIDTHS) } }
-    val listFocusRequester = remember { FocusRequester() }
-
-    // 起動してすぐキーで読み始められるよう、最初のフォーカスを記事の一覧に置く。
-    LaunchedEffect(Unit) { listFocusRequester.requestFocus() }
-
     Column(modifier.fillMaxSize().background(style.colors.panel)) {
         Toolbar(state, actions)
         HorizontalSplit(
@@ -111,7 +106,6 @@ fun MainScreen(state: MainUiState, actions: MainActions, modifier: Modifier = Mo
                             actions = actions,
                             columnWidths = columnWidths,
                             onColumnResize = { column, width -> columnWidths[column] = width },
-                            focusRequester = listFocusRequester,
                         )
                     },
                     second = { ArticlePane(state.selectedArticle, state.channelNames) },
@@ -149,9 +143,14 @@ private fun ArticleTable(
     actions: MainActions,
     columnWidths: Map<ArticleColumn, Dp>,
     onColumnResize: (ArticleColumn, Dp) -> Unit,
-    focusRequester: FocusRequester,
 ) {
     val colors = LocalLegirssStyle.current.colors
+    val focusRequester = remember { FocusRequester() }
+
+    // 起動してすぐキーで読み始められるよう、最初のフォーカスを記事の一覧に置く。
+    // 一覧が画面に組み込まれた後に実行されるよう、一覧と同じ場所で行う。
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
     DataTable(
         columns = ArticleColumn.entries.map { column ->
             TableColumn(
