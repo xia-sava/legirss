@@ -26,7 +26,7 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
         jvmMain.dependencies {
-            implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.java)
             implementation(libs.sqldelight.sqliteDriver)
         }
         jvmTest.dependencies {
