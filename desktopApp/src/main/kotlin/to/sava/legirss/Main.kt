@@ -103,7 +103,7 @@ fun main(args: Array<String>) {
     val updater = FeedUpdater(
         store = store,
         fetcher = fetcher,
-        parseDispatcher = Dispatchers.Default,
+        workDispatcher = Dispatchers.Default,
         now = System::currentTimeMillis,
         reportError = AppLog::error,
     )

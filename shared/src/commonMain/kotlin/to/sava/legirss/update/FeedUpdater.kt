@@ -4,7 +4,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,8 +35,12 @@ data class UpdateProgress(
 class FeedUpdater(
     private val store: LegirssStore,
     private val fetcher: FeedFetcher,
-    /** フィードの解釈に使う。 */
-    private val parseDispatcher: CoroutineDispatcher,
+    /**
+     * チャンネルごとの取得と取り込みを進めるのに使う。フィードの解釈もここで行う。
+     *
+     * 呼び出した側のスレッド（画面のスレッド）で進めると、画面の操作と互いに待たせ合うので、別に持つ。
+     */
+    private val workDispatcher: CoroutineDispatcher,
     private val now: () -> Long,
     /** 想定していない失敗を、説明と原因を添えて記録する。 */
     private val reportError: (String, Throwable) -> Unit,
@@ -64,7 +67,7 @@ class FeedUpdater(
         mutableProgress.value = UpdateProgress(total = targets.size)
         try {
             val permits = Semaphore(parallelism)
-            coroutineScope {
+            withContext(workDispatcher) {
                 targets.map { target ->
                     async {
                         val outcome = permits.withPermit { updateChannelOrReport(target, retention) }
@@ -114,7 +117,7 @@ class FeedUpdater(
 
     private suspend fun applyFetched(target: UpdateTarget, result: FetchResult.Fetched, retention: Retention): Outcome {
         val feedUrl = result.permanentUrl ?: target.feedUrl
-        val feed = withContext(parseDispatcher) { FeedParser.parse(FeedText.decode(result.body, result.charset), feedUrl) }
+        val feed = FeedParser.parse(FeedText.decode(result.body, result.charset), feedUrl)
             ?: return recordFailure(target, ChannelError.NOT_A_FEED, detail = "フィードとして読めません", gone = false)
         val added = store.applyFetchedFeed(target, feedUrl, feed, result.etag, result.lastModified, retention, now())
         return Outcome.Succeeded(added)
