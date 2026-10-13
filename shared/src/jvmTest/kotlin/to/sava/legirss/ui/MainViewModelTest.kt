@@ -393,7 +393,7 @@ class MainViewModelTest {
         assertEquals(0, overdue)
     }
 
-    /** URL を指定してチャンネルを追加すると、ツリーに登録されて選ばれ、取得した記事が一覧に出る。窓は閉じる。 */
+    /** URL を指定してチャンネルを追加すると、ツリーに登録されて選ばれ、取得した記事が一覧に出る。ダイアログは閉じる。 */
     @Test
     fun addsChannelFromFeedUrl() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()
@@ -463,7 +463,7 @@ class MainViewModelTest {
         assertNull(viewModel.state.value.dialog)
     }
 
-    /** 削除は確認の窓を経て行い、確認するとノードと記事が消えて、親にあたるノードが選ばれる。 */
+    /** 削除は確認のダイアログを経て行い、確認するとノードと記事が消えて、親にあたるノードが選ばれる。 */
     @Test
     fun deletesNodeAfterConfirmation() = runTest(UnconfinedTestDispatcher()) {
         val viewModel = loadedViewModel()

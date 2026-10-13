@@ -59,9 +59,9 @@ private val BUTTON_PADDING = 10.dp
 private val CHECKBOX_SIZE = 13.dp
 
 /**
- * 画面の手前に出して、閉じるまで後ろの画面を操作させない窓。Esc で閉じる。
+ * 画面の手前に出して、閉じるまで後ろの画面を操作させないダイアログ。Esc で閉じる。
  *
- * 中に文字の入力欄が無ければ、キーを受けられるよう窓そのものにフォーカスを置く。
+ * 中に文字の入力欄が無ければ、キーを受けられるようダイアログそのものにフォーカスを置く。
  */
 @Composable
 fun ModalDialog(
@@ -101,7 +101,7 @@ fun ModalDialog(
     }
 }
 
-/** 窓の下端に、ボタンを右寄せで並べる。 */
+/** ダイアログの下端に、ボタンを右寄せで並べる。 */
 @Composable
 fun DialogButtons(content: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DIALOG_ITEM_GAP, Alignment.End)) { content() }
@@ -150,7 +150,7 @@ fun Checkbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String
     }
 }
 
-/** 窓の中の説明やメッセージの文。 */
+/** ダイアログの中の説明やメッセージの文。 */
 @Composable
 fun DialogText(text: String, dim: Boolean = false) {
     val style = LocalLegirssStyle.current

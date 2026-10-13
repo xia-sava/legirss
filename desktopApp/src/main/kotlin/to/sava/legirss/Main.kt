@@ -210,7 +210,7 @@ fun main(args: Array<String>) {
             state = windowState,
             onKeyEvent = { event ->
                 when {
-                    // 窓を手前に出している間は、後ろの画面のキー操作を受け付けない。
+                    // ダイアログを手前に出している間は、後ろの画面のキー操作を受け付けない。
                     state.dialog != null -> false
                     event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
                         windowVisible = false

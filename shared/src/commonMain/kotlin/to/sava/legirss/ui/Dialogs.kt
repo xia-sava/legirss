@@ -75,9 +75,9 @@ private val NUMBER_RANGE_WIDTH = 72.dp
 private val NUMBER_ROW_GAP = 8.dp
 
 /**
- * 手前に出す窓を、[dialog] の種類に合わせて描く。
+ * 手前に出すダイアログを、[dialog] の種類に合わせて描く。
  *
- * @param settings いまの設定。設定の窓を開いたときに、入力欄へ入れておく。
+ * @param settings いまの設定。設定のダイアログを開いたときに、入力欄へ入れておく。
  */
 @Composable
 fun DialogHost(dialog: DialogState, settings: AppSettings, actions: MainActions) {

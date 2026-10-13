@@ -82,7 +82,7 @@ class MainViewModel(
     private var updateJob: Job? = null
     private var contentJob: Job? = null
 
-    /** 手前に出している窓が進めている処理。 */
+    /** 手前に出しているダイアログが進めている処理。 */
     private var dialogJob: Job? = null
     private var windowVisible = true
 
@@ -279,7 +279,7 @@ class MainViewModel(
         mutableState.update { it.copy(dialog = DialogState.AddChannel()) }
     }
 
-    /** 手前に出している窓を閉じる。窓が進めていた処理は取り消し、フォーカスを一覧へ戻す。 */
+    /** 手前に出しているダイアログを閉じる。ダイアログが進めていた処理は取り消し、フォーカスを一覧へ戻す。 */
     override fun closeDialog() {
         dialogJob?.cancel()
         mutableState.update { it.copy(dialog = null, listFocusRequest = it.listFocusRequest + 1) }
@@ -288,7 +288,7 @@ class MainViewModel(
     /**
      * [url] からフィードを探し、1 つに決まれば登録する。
      *
-     * ページが複数のフィードを案内していれば、候補を窓に出して選ばせる。
+     * ページが複数のフィードを案内していれば、候補をダイアログに出して選ばせる。
      * 登録済みのフィードなら一度知らせ、同じフィードをもう一度指定されたら重ねて登録する。
      */
     override fun submitAddChannel(url: String) {
@@ -328,7 +328,7 @@ class MainViewModel(
         mutableState.update { it.copy(dialog = DialogState.EditText(EditTarget.FeedUrl(node.id), channel.feedUrl)) }
     }
 
-    /** 入力の窓で決めた文字を、窓の目的に合わせて保存する。前後の空白を除いて空なら何もしない。 */
+    /** 入力のダイアログで決めた文字を、ダイアログの目的に合わせて保存する。前後の空白を除いて空なら何もしない。 */
     override fun submitText(text: String) {
         val dialog = mutableState.value.dialog as? DialogState.EditText ?: return
         val entered = text.trim().ifEmpty { return }
@@ -349,13 +349,13 @@ class MainViewModel(
         expanded = expanded + NodeSelection.All + listOfNotNull(parentId?.let(NodeSelection::Node))
     }
 
-    /** [selection] のノードを削除してよいかを尋ねる窓を出す。「全ての記事」に対しては何もしない。 */
+    /** [selection] のノードを削除してよいかを尋ねるダイアログを出す。「全ての記事」に対しては何もしない。 */
     override fun requestDelete(selection: NodeSelection) {
         val node = tree.nodeOf(selection) ?: return
         mutableState.update { it.copy(dialog = DialogState.ConfirmDelete(node.id, node.name, node.kind)) }
     }
 
-    /** 確認の窓で尋ねていたノードを削除する。削除したノードの親を選び直す。 */
+    /** 確認のダイアログで尋ねていたノードを削除する。削除したノードの親を選び直す。 */
     override fun confirmDelete() {
         val dialog = mutableState.value.dialog as? DialogState.ConfirmDelete ?: return
         val parent = tree.nodeOf(NodeSelection.Node(dialog.nodeId))?.parentId?.let(NodeSelection::Node) ?: NodeSelection.All

@@ -117,7 +117,7 @@ class MainScreenRenderTest {
         assertTrue(pixels.toSet().size > 2, "何も描かれていない")
     }
 
-    /** 手前に出す窓を持つ状態を、窓ごと描画できる。 */
+    /** 手前に出すダイアログを持つ状態を、ダイアログごと描画できる。 */
     @Test
     fun rendersDialogOverScreen() {
         val dialog = DialogState.AddChannel(
@@ -134,7 +134,7 @@ class MainScreenRenderTest {
         assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
     }
 
-    /** 設定の窓を、いまの設定を入力欄に入れた状態で描画できる。 */
+    /** 設定のダイアログを、いまの設定を入力欄に入れた状態で描画できる。 */
     @Test
     fun rendersSettingsDialog() {
         val image = MainScreenRenderer.render(MainUiState(dialog = DialogState.Settings))

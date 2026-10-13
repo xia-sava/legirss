@@ -68,7 +68,7 @@ data class ArticleContent(
     val blocks: List<HtmlBlock>,
 )
 
-/** 画面の手前に出して、入力や確認を求める窓。 */
+/** 画面の手前に出して、入力や確認を求めるダイアログ。 */
 sealed interface DialogState {
     /** チャンネルの追加。 */
     data class AddChannel(
@@ -134,7 +134,7 @@ data class MainUiState(
     val statusMessage: String? = null,
     /** 値が変わるたびに、記事の一覧へフォーカスを移す。 */
     val listFocusRequest: Int = 0,
-    /** 手前に出している窓。出していなければ null。 */
+    /** 手前に出しているダイアログ。出していなければ null。 */
     val dialog: DialogState? = null,
     val settings: AppSettings = AppSettings(),
 ) {
