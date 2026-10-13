@@ -23,6 +23,8 @@ data class LegirssColors(
     val selectionInactive: Color = Color(0xFFE4E4E4),
     val rowAlternate: Color = Color(0xFFF4F4F4),
     val hover: Color = Color(0xFFE5F1FB),
+    val emphasis: Color = Color(0xFFCCE4F7),
+    val emphasisHover: Color = Color(0xFFB3D7F2),
     val iconGroup: Color = Color(0xFFE2B04A),
     val iconChannel: Color = Color(0xFFF08A24),
     val iconPaused: Color = Color(0xFFA8A8A8),

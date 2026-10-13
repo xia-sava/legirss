@@ -112,7 +112,7 @@ private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
 private const val DELETE_ARTICLE_LABEL = "削除"
 
-/** ツールバーの右端に出す通知。[onClick] があれば、押せるボタンとして出す。 */
+/** ツールバーの右端に出す通知。[onClick] があれば、色を付けた押せるボタンとして出す。 */
 @Immutable
 data class ToolbarNotice(
     val label: String,
@@ -305,7 +305,7 @@ private fun Toolbar(state: MainUiState, actions: MainActions, notice: ToolbarNot
         notice?.let {
             when (val onClick = it.onClick) {
                 null -> BasicText(it.label, style = style.textStyle(color = style.colors.textDim))
-                else -> ToolbarButton(it.label, onClick = onClick)
+                else -> ToolbarButton(it.label, onClick = onClick, emphasized = true)
             }
         }
     }
