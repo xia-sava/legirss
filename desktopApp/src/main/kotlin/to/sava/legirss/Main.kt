@@ -51,6 +51,8 @@ import to.sava.legirss.update.FeedUpdater
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 import java.io.IOException
 import java.net.URI
 import java.net.URISyntaxException
@@ -108,6 +110,7 @@ fun main(args: Array<String>) {
                 parseDispatcher = Dispatchers.Default,
                 now = System::currentTimeMillis,
                 openUrl = ::openInBrowser,
+                copyText = ::copyToClipboard,
                 reportError = AppLog::error,
                 initialSettings = AppSettings.fromSettings(settings),
             ).also(MainViewModel::load)
@@ -269,6 +272,15 @@ private fun dataDir(): Path =
     System.getProperty(DATA_DIR_PROPERTY)?.let(Path::of)
         ?: System.getenv("APPDATA")?.let { Path.of(it, APP_NAME) }
         ?: Path.of(System.getProperty("user.home"), ".$APP_NAME")
+
+/** 文字をクリップボードへ写す。ほかのアプリがクリップボードを使っていて写せなかった場合は理由を記録する。 */
+private fun copyToClipboard(text: String) {
+    try {
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+    } catch (exception: IllegalStateException) {
+        AppLog.warn("クリップボードへ写せません", exception)
+    }
+}
 
 /** URL を既定のブラウザで開く。開けなかった場合は理由を記録する。 */
 private fun openInBrowser(url: String) {

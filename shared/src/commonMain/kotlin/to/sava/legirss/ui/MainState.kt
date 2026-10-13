@@ -55,6 +55,13 @@ data class ArticleSort(
         if (clicked == column) copy(descending = !descending) else copy(column = clicked)
 }
 
+/** 記事からクリップボードへ写す内容。 */
+enum class CopyContent {
+    URL,
+    TITLE,
+    TITLE_AND_URL,
+}
+
 /** 表示用に解釈した記事の本文。 */
 data class ArticleContent(
     val articleId: Long,
@@ -110,7 +117,12 @@ data class MainUiState(
     /** 全チャンネルを合わせた記事数。 */
     val totalCount: ArticleCount = ArticleCount.ZERO,
     val articles: List<ArticleRow> = emptyList(),
+    /** 表示している記事の位置。 */
     val selectedArticleIndex: Int? = null,
+    /** まとめて操作するために印を付けた記事。空なら、操作は表示している記事だけに及ぶ。 */
+    val markedArticleIds: Set<Long> = emptySet(),
+    /** 範囲で印を付けたときの、範囲の終わりの位置。範囲で付けていなければ null。 */
+    val markRangeEndIndex: Int? = null,
     val channelNames: Map<Long, String> = emptyMap(),
     val filter: StateFilter = StateFilter.ALL,
     val sort: ArticleSort = ArticleSort(),
@@ -127,6 +139,10 @@ data class MainUiState(
     val settings: AppSettings = AppSettings(),
 ) {
     val selectedArticle: ArticleRow? get() = selectedArticleIndex?.let(articles::getOrNull)
+
+    /** 状態の変更・削除・コピーなどの操作が及ぶ記事。印を付けた記事があればそれら、無ければ表示している記事。 */
+    val targetArticles: List<ArticleRow>
+        get() = if (markedArticleIds.isEmpty()) listOfNotNull(selectedArticle) else articles.filter { it.id in markedArticleIds }
 
     /**
      * 一覧で一番下にある未読の記事の位置。未読が無ければ null。

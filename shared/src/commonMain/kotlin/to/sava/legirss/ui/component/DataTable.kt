@@ -41,14 +41,26 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import kotlinx.coroutines.launch
 import to.sava.legirss.ui.platform.HorizontalResizePointerIcon
 import to.sava.legirss.ui.platform.ListScrollbar
@@ -69,9 +81,26 @@ private val SCROLLBAR_WIDTH = 10.dp
 private const val SORT_MARK_ASCENDING = "▲"
 private const val SORT_MARK_DESCENDING = "▼"
 
+/** 行の選び方。 */
+enum class RowSelectMode {
+    /** その行だけを選ぶ。 */
+    SINGLE,
+
+    /** 選んでいる行からその行までの範囲に印を付ける（Shift）。 */
+    RANGE,
+
+    /** その行の印を付け外しする（Ctrl）。 */
+    TOGGLE,
+}
+
 /**
- * 列見出しつきの一覧。行の高さは固定で、1 行だけを選択できる。
+ * 列見出しつきの一覧。行の高さは固定。1 行を選べるほか、複数の行に印を付けられる。
  *
+ * @param selectedIndex 選んでいる行。
+ * @param cursorIndex キー操作で動かす起点の行。範囲で印を付けている間は、範囲の終わりの行になる。
+ * @param isMarked 印を付けた行か。印を付けた行は、選んでいる行と同じ色で示す。
+ * @param onSelectAll 全ての行に印を付ける操作（Ctrl+A）をした。
+ * @param onContextMenu 行を右クリックしたときに、その行と、押した位置（この一覧の左上からの距離）を伝える。
  * @param sortedColumn 並べ替えの印を出す列。
  * @param centerSelection キー操作で選択を動かしたとき、選択行を表示範囲の中央付近へ寄せる。
  * @param focusRequester この一覧にフォーカスを移すためのもの。
@@ -82,7 +111,11 @@ fun <C, R> DataTable(
     rows: List<R>,
     rowKey: (R) -> Any,
     selectedIndex: Int?,
-    onSelectIndex: (Int) -> Unit,
+    cursorIndex: Int?,
+    isMarked: (R) -> Boolean,
+    onSelectIndex: (Int, RowSelectMode) -> Unit,
+    onSelectAll: () -> Unit,
+    onContextMenu: (Int, IntOffset) -> Unit,
     sortedColumn: C?,
     sortDescending: Boolean,
     onColumnClick: (C) -> Unit,
@@ -94,23 +127,27 @@ fun <C, R> DataTable(
 ) {
     val style = LocalLegirssStyle.current
     val density = LocalDensity.current
+    val windowInfo = LocalWindowInfo.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var focused by remember { mutableStateOf(false) }
     val rowHeightPx = with(density) { style.listRowHeight.roundToPx() }
+    val headerHeightPx = with(density) { style.headerHeight.roundToPx() }
+    val currentRowCount by rememberUpdatedState(rows.size)
+    val currentOnContextMenu by rememberUpdatedState(onContextMenu)
 
     // キー操作以外で選択が表示範囲の外へ移ったときも、選択行が見えるようにする。
-    LaunchedEffect(selectedIndex) {
+    LaunchedEffect(cursorIndex) {
         val laidOut = listState.layoutInfo.visibleItemsInfo.isNotEmpty()
-        if (selectedIndex != null && laidOut && !listState.isFullyVisible(selectedIndex)) {
-            listState.bringIntoView(selectedIndex, rowHeightPx, centerSelection)
+        if (cursorIndex != null && laidOut && !listState.isFullyVisible(cursorIndex)) {
+            listState.bringIntoView(cursorIndex, rowHeightPx, centerSelection)
         }
     }
 
-    fun moveSelection(target: Int) {
+    fun moveSelection(target: Int, mode: RowSelectMode) {
         if (rows.isEmpty()) return
         val index = target.coerceIn(0, rows.lastIndex)
-        onSelectIndex(index)
+        onSelectIndex(index, mode)
         scope.launch { listState.bringIntoView(index, rowHeightPx, centerSelection) }
     }
 
@@ -122,18 +159,39 @@ fun <C, R> DataTable(
             .focusable()
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                val current = selectedIndex ?: -1
+                if (event.isCtrlPressed && event.key == Key.A) {
+                    onSelectAll()
+                    return@onKeyEvent true
+                }
+                if (event.isCtrlPressed || event.isAltPressed) return@onKeyEvent false
+                val current = cursorIndex ?: -1
                 val page = (listState.layoutInfo.viewportSize.height / rowHeightPx - 1).coerceAtLeast(1)
+                val mode = if (event.isShiftPressed) RowSelectMode.RANGE else RowSelectMode.SINGLE
                 when (event.key) {
-                    Key.DirectionUp -> moveSelection(current - 1)
-                    Key.DirectionDown -> moveSelection(current + 1)
-                    Key.PageUp -> moveSelection(current - page)
-                    Key.PageDown -> moveSelection(current + page)
-                    Key.MoveHome -> moveSelection(0)
-                    Key.MoveEnd -> moveSelection(rows.lastIndex)
+                    Key.DirectionUp -> moveSelection(current - 1, mode)
+                    Key.DirectionDown -> moveSelection(current + 1, mode)
+                    Key.PageUp -> moveSelection(current - page, mode)
+                    Key.PageDown -> moveSelection(current + page, mode)
+                    Key.MoveHome -> moveSelection(0, mode)
+                    Key.MoveEnd -> moveSelection(rows.lastIndex, mode)
                     else -> return@onKeyEvent false
                 }
                 true
+            }
+            .pointerInput(rowHeightPx, headerHeightPx) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type != PointerEventType.Press || !event.buttons.isSecondaryPressed) continue
+                        val position = event.changes.first().position
+                        // 行の高さは一定なので、見出しより下で押した位置とスクロールの量から行を求める。
+                        val belowHeader = position.y - headerHeightPx
+                        if (belowHeader < 0) continue
+                        val scrolled = listState.firstVisibleItemIndex * rowHeightPx + listState.firstVisibleItemScrollOffset
+                        val index = ((belowHeader + scrolled) / rowHeightPx).toInt()
+                        if (index < currentRowCount) currentOnContextMenu(index, position.round())
+                    }
+                }
             },
     ) {
         val contentWidth = maxOf(columns.fold(0.dp) { total, column -> total + column.width }, maxWidth - SCROLLBAR_WIDTH)
@@ -142,9 +200,10 @@ fun <C, R> DataTable(
                 HeaderRow(columns, sortedColumn, sortDescending, onColumnClick, onColumnResize, Modifier.width(contentWidth))
                 LazyColumn(state = listState, modifier = Modifier.width(contentWidth).weight(1f)) {
                     items(count = rows.size, key = { rowKey(rows[it]) }) { index ->
+                        val highlighted = index == selectedIndex || isMarked(rows[index])
                         val background = when {
-                            index == selectedIndex && focused -> style.colors.selection
-                            index == selectedIndex -> style.colors.selectionInactive
+                            highlighted && focused -> style.colors.selection
+                            highlighted -> style.colors.selectionInactive
                             index % 2 == 1 -> style.colors.rowAlternate
                             else -> Color.Transparent
                         }
@@ -155,7 +214,13 @@ fun <C, R> DataTable(
                                 .background(background)
                                 .clickable(remember { MutableInteractionSource() }, indication = null) {
                                     focusRequester.requestFocus()
-                                    onSelectIndex(index)
+                                    val modifiers = windowInfo.keyboardModifiers
+                                    val mode = when {
+                                        modifiers.isShiftPressed -> RowSelectMode.RANGE
+                                        modifiers.isCtrlPressed -> RowSelectMode.TOGGLE
+                                        else -> RowSelectMode.SINGLE
+                                    }
+                                    onSelectIndex(index, mode)
                                 },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

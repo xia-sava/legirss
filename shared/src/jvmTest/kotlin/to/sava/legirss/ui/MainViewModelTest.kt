@@ -32,6 +32,7 @@ class MainViewModelTest {
     private var feedBody = "<rss version=\"2.0\"><channel><title>Feed</title></channel></rss>"
 
     private val openedUrls = mutableListOf<String>()
+    private val copiedTexts = mutableListOf<String>()
     private var clock = 1_000L
 
     /** null でなければ、時刻を尋ねられたときにこれを投げる。 */
@@ -81,6 +82,7 @@ class MainViewModelTest {
             parseDispatcher = Dispatchers.Unconfined,
             now = { clockFailure?.let { throw it } ?: clock },
             openUrl = openedUrls::add,
+            copyText = copiedTexts::add,
             reportError = reportError,
             initialSettings = AppSettings(),
         ).also(MainViewModel::load)
@@ -209,7 +211,7 @@ class MainViewModelTest {
         val viewModel = loadedViewModel()
         viewModel.selectArticle(2)
 
-        viewModel.deleteSelectedArticle()
+        viewModel.deleteSelectedArticles()
 
         assertEquals(listOf("newer", "older"), viewModel.titles)
         assertEquals(1, viewModel.state.value.selectedArticleIndex)
@@ -224,7 +226,7 @@ class MainViewModelTest {
         viewModel.selectArticle(2)
         clockFailure = IllegalStateException("unexpected")
 
-        viewModel.deleteSelectedArticle()
+        viewModel.deleteSelectedArticles()
         val messageAfterFailure = viewModel.state.value.statusMessage
         clockFailure = null
         viewModel.selectArticle(0)
@@ -232,6 +234,80 @@ class MainViewModelTest {
         assertEquals("エラーが発生しました", messageAfterFailure)
         assertEquals(listOf("エラーが発生しました"), reportedErrors)
         assertEquals(ArticleState.READ, storedStates()["newer"])
+    }
+
+    private val MainViewModel.markedTitles
+        get() = state.value.articles.filter { it.id in state.value.markedArticleIds }.map { it.title }
+
+    /** 範囲で印を付けても、表示している記事は変わらず、印を付けた記事は既読にならない。記事を選び直すと印は外れる。 */
+    @Test
+    fun marksRangeWithoutReadingIt() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+
+        viewModel.markArticlesTo(0)
+        val marked = viewModel.markedTitles
+        val statesWhileMarked = viewModel.states
+        val shownWhileMarked = viewModel.state.value.selectedArticle?.title
+        viewModel.selectArticle(2)
+
+        assertEquals(listOf("newer", "older", "read"), marked)
+        assertEquals(listOf(ArticleState.UNREAD, ArticleState.UNREAD, ArticleState.READ), statesWhileMarked)
+        assertEquals("read", shownWhileMarked)
+        assertEquals(emptyList(), viewModel.markedTitles)
+    }
+
+    /** 印の付け外しは 1 件ずつでき、最初の 1 つを付けるときは表示している記事にも印が付く。全てに付けることもできる。 */
+    @Test
+    fun togglesMarksOneByOne() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+
+        viewModel.toggleArticleMark(0)
+        val afterFirstToggle = viewModel.markedTitles
+        viewModel.toggleArticleMark(2)
+        val afterSecondToggle = viewModel.markedTitles
+        viewModel.markAllArticles()
+
+        assertEquals(listOf("newer", "read"), afterFirstToggle)
+        assertEquals(listOf("newer"), afterSecondToggle)
+        assertEquals(listOf("newer", "older", "read"), viewModel.markedTitles)
+    }
+
+    /** 印を付けた記事があれば、状況の変更・コピー・削除はそれら全てに及ぶ。削除すると印は外れる。 */
+    @Test
+    fun appliesOperationsToMarkedArticles() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+        viewModel.toggleArticleMark(1)
+
+        viewModel.setSelectedState(ArticleState.PROTECTED)
+        val statesAfterChange = storedStates()
+        viewModel.copySelected(CopyContent.TITLE_AND_URL)
+        viewModel.deleteSelectedArticles()
+
+        assertEquals(ArticleState.PROTECTED, statesAfterChange["older"])
+        assertEquals(ArticleState.PROTECTED, statesAfterChange["read"])
+        assertEquals(ArticleState.UNREAD, statesAfterChange["newer"])
+        assertEquals(listOf("older https://example.com/older\nread https://example.com/read"), copiedTexts)
+        assertEquals(listOf("newer"), viewModel.titles)
+        assertEquals(setOf("newer"), storedStates().keys)
+        assertEquals(emptyList(), viewModel.markedTitles)
+        assertEquals(0, viewModel.state.value.selectedArticleIndex)
+    }
+
+    /** 印を付けていなければ、コピーは表示している記事だけを対象にする。記事を選んでいなければ何も写さない。 */
+    @Test
+    fun copiesUrlOfShownArticle() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.copySelected(CopyContent.URL)
+        val copiedWithoutSelection = copiedTexts.toList()
+        viewModel.selectArticle(0)
+        viewModel.copySelected(CopyContent.URL)
+
+        assertEquals(emptyList(), copiedWithoutSelection)
+        assertEquals(listOf("https://example.com/newer"), copiedTexts)
     }
 
     /** 絞り込みを切り替えると、その状況の記事だけが並ぶ。 */

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -58,6 +59,7 @@ import to.sava.legirss.ui.component.HorizontalSplit
 import to.sava.legirss.ui.component.HtmlContent
 import to.sava.legirss.ui.component.MenuEntry
 import to.sava.legirss.ui.component.PopupMenu
+import to.sava.legirss.ui.component.RowSelectMode
 import to.sava.legirss.ui.component.SegmentedButtons
 import to.sava.legirss.ui.component.TableColumn
 import to.sava.legirss.ui.component.TableText
@@ -98,6 +100,15 @@ private const val RENAME_MENU_LABEL = "名前の変更…"
 private const val CHANGE_FEED_URL_MENU_LABEL = "フィードの URL の変更…"
 private const val DELETE_MENU_LABEL = "削除…"
 private const val SORT_BY_NAME_MENU_LABEL = "中を名前の順に並べ直す"
+
+private const val OPEN_IN_BROWSER_LABEL = "ブラウザで開く"
+private const val MARK_UNREAD_LABEL = "未読にする"
+private const val MARK_READ_LABEL = "既読にする"
+private const val PROTECT_LABEL = "保護する"
+private const val COPY_URL_LABEL = "URL をコピー"
+private const val COPY_TITLE_LABEL = "タイトルをコピー"
+private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
+private const val DELETE_ARTICLE_LABEL = "削除"
 
 /**
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
@@ -286,13 +297,59 @@ private fun ArticleTable(
     onColumnResize: (ArticleColumn, Dp) -> Unit,
     panes: PaneFocus,
 ) {
-    val colors = LocalLegirssStyle.current.colors
     val focusRequester = panes.requesterOf(Pane.LIST)
 
     // 起動した直後と、しまっていたウィンドウを出した直後に、キーですぐ読み始められるようフォーカスを一覧に置く。
     // 一覧が画面に組み込まれた後に実行されるよう、一覧と同じ場所で行う。
     LaunchedEffect(state.listFocusRequest) { focusRequester.requestFocus() }
 
+    // 右クリックのメニューを出す位置。出していなければ null。
+    var menuPosition by remember { mutableStateOf<IntOffset?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        ArticleDataTable(
+            state = state,
+            actions = actions,
+            columnWidths = columnWidths,
+            onColumnResize = onColumnResize,
+            onContextMenu = { index, position ->
+                // 操作の対象になっていない行で開いたら、その行を選んでから出す。
+                if (state.articles.getOrNull(index) !in state.targetArticles) actions.selectArticle(index)
+                menuPosition = position
+            },
+            modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
+            focusRequester = focusRequester,
+        )
+        menuPosition?.let { position ->
+            PopupMenu(articleMenuEntries(actions), position, onDismiss = { menuPosition = null })
+        }
+    }
+}
+
+private fun articleMenuEntries(actions: MainActions): List<MenuEntry?> = listOf(
+    MenuEntry(OPEN_IN_BROWSER_LABEL, onClick = actions::openSelectedArticle),
+    null,
+    MenuEntry(MARK_UNREAD_LABEL) { actions.setSelectedState(ArticleState.UNREAD) },
+    MenuEntry(MARK_READ_LABEL) { actions.setSelectedState(ArticleState.READ) },
+    MenuEntry(PROTECT_LABEL) { actions.setSelectedState(ArticleState.PROTECTED) },
+    null,
+    MenuEntry(COPY_URL_LABEL) { actions.copySelected(CopyContent.URL) },
+    MenuEntry(COPY_TITLE_LABEL) { actions.copySelected(CopyContent.TITLE) },
+    MenuEntry(COPY_TITLE_AND_URL_LABEL) { actions.copySelected(CopyContent.TITLE_AND_URL) },
+    null,
+    MenuEntry(DELETE_ARTICLE_LABEL, onClick = actions::deleteSelectedArticles),
+)
+
+@Composable
+private fun ArticleDataTable(
+    state: MainUiState,
+    actions: MainActions,
+    columnWidths: Map<ArticleColumn, Dp>,
+    onColumnResize: (ArticleColumn, Dp) -> Unit,
+    onContextMenu: (Int, IntOffset) -> Unit,
+    modifier: Modifier,
+    focusRequester: FocusRequester,
+) {
+    val colors = LocalLegirssStyle.current.colors
     DataTable(
         columns = ArticleColumn.entries.map { column ->
             TableColumn(
@@ -305,13 +362,23 @@ private fun ArticleTable(
         rows = state.articles,
         rowKey = ArticleRow::id,
         selectedIndex = state.selectedArticleIndex,
-        onSelectIndex = actions::selectArticle,
+        cursorIndex = state.markRangeEndIndex ?: state.selectedArticleIndex,
+        isMarked = { it.id in state.markedArticleIds },
+        onSelectIndex = { index, mode ->
+            when (mode) {
+                RowSelectMode.SINGLE -> actions.selectArticle(index)
+                RowSelectMode.RANGE -> actions.markArticlesTo(index)
+                RowSelectMode.TOGGLE -> actions.toggleArticleMark(index)
+            }
+        },
+        onSelectAll = actions::markAllArticles,
+        onContextMenu = onContextMenu,
         sortedColumn = state.sort.column,
         sortDescending = state.sort.descending,
         onColumnClick = actions::sortBy,
         onColumnResize = onColumnResize,
         centerSelection = state.settings.centerSelection,
-        modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
+        modifier = modifier,
         focusRequester = focusRequester,
     ) { article, column ->
         val unread = article.state == ArticleState.UNREAD
@@ -397,7 +464,8 @@ private fun ArticlePane(state: MainUiState, actions: MainActions, scroll: Scroll
             )
             Spacer(Modifier.height(ARTICLE_PANE_PADDING))
             state.articleContent?.takeIf { it.articleId == article.id }?.let { content ->
-                HtmlContent(content.blocks, actions::openLink, Modifier.fillMaxWidth())
+                // 本文の文字を、ドラッグで選んでコピーできるようにする。
+                SelectionContainer { HtmlContent(content.blocks, actions::openLink, Modifier.fillMaxWidth()) }
             }
         }
         ContentScrollbar(scroll, Modifier.width(SCROLLBAR_WIDTH).fillMaxHeight())

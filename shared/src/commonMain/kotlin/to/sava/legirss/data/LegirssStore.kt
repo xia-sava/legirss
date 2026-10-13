@@ -210,15 +210,21 @@ class LegirssStore(
         queries.recordFetchFailure(now, error.code, detail, goneCount.toLong(), goneAt, if (paused) 1L else 0L, target.channelId)
     }
 
-    suspend fun setArticleState(articleId: Long, state: ArticleState) = access {
-        queries.updateArticleState(state.code, articleId)
+    suspend fun setArticleState(articleId: Long, state: ArticleState) = setArticleStates(listOf(articleId), state)
+
+    suspend fun setArticleStates(articleIds: Collection<Long>, state: ArticleState) = access {
+        database.transaction { articleIds.forEach { queries.updateArticleState(state.code, it) } }
     }
 
+    suspend fun deleteArticle(articleId: Long, now: Long) = deleteArticles(listOf(articleId), now)
+
     /** 記事を削除する。フィードに残っていても登録し直されないよう、識別子を控えておく。 */
-    suspend fun deleteArticle(articleId: Long, now: Long) = access {
+    suspend fun deleteArticles(articleIds: Collection<Long>, now: Long) = access {
         database.transaction {
-            queries.rememberDeletedArticle(now, articleId)
-            queries.deleteArticle(articleId)
+            articleIds.forEach { articleId ->
+                queries.rememberDeletedArticle(now, articleId)
+                queries.deleteArticle(articleId)
+            }
         }
     }
 

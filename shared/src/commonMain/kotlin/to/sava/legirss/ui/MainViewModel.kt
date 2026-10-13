@@ -43,6 +43,8 @@ class MainViewModel(
     private val now: () -> Long,
     /** URL を外部のブラウザで開く。 */
     private val openUrl: (String) -> Unit,
+    /** 文字をクリップボードへ写す。 */
+    private val copyText: (String) -> Unit,
     /** 想定していない失敗を、説明と原因を添えて記録する。 */
     private val reportError: (String, Throwable) -> Unit,
     /** 起動した時点で保存されていた設定。 */
@@ -113,17 +115,58 @@ class MainViewModel(
         mutableState.update { it.copy(sort = it.sort.toggledBy(column)).withArrangedArticles() }
     }
 
-    /** 記事を選ぶ。未読なら既読にする。 */
+    /** 記事を選んで表示する。未読なら既読にする。付けていた印は外す。 */
     override fun selectArticle(index: Int) {
         val article = mutableState.value.articles.getOrNull(index) ?: return
-        mutableState.update { it.copy(selectedArticleIndex = index) }
-        if (article.state == ArticleState.UNREAD) changeState(index, ArticleState.READ)
+        mutableState.update { it.copy(selectedArticleIndex = index).withoutMarks() }
+        if (article.state == ArticleState.UNREAD) changeStates(listOf(article), ArticleState.READ)
         showSelectedContent()
     }
 
-    /** 選んでいる記事のリンクを外部のブラウザで開く。 */
+    /**
+     * 表示している記事から [index] までの範囲に印を付ける。表示している記事は変えず、既読にもしない。
+     *
+     * 記事を表示していなければ、[index] の記事だけに印を付ける。
+     */
+    override fun markArticlesTo(index: Int) {
+        mutableState.update { state ->
+            if (index !in state.articles.indices) return@update state
+            val start = state.selectedArticleIndex ?: index
+            val range = minOf(start, index)..maxOf(start, index)
+            state.copy(markedArticleIds = state.articles.slice(range).map { it.id }.toSet(), markRangeEndIndex = index)
+        }
+    }
+
+    /** [index] の記事の印を付け外しする。最初の 1 つを付けるときは、表示している記事にも印を付ける。 */
+    override fun toggleArticleMark(index: Int) {
+        mutableState.update { state ->
+            val id = state.articles.getOrNull(index)?.id ?: return@update state
+            val marked = state.markedArticleIds.ifEmpty { setOfNotNull(state.selectedArticle?.id) }
+            state.copy(markedArticleIds = if (id in marked) marked - id else marked + id, markRangeEndIndex = null)
+        }
+    }
+
+    override fun markAllArticles() {
+        mutableState.update { state -> state.copy(markedArticleIds = state.articles.map { it.id }.toSet(), markRangeEndIndex = null) }
+    }
+
+    /** 操作の対象の記事のリンクを外部のブラウザで開く。 */
     override fun openSelectedArticle() {
-        mutableState.value.selectedArticle?.link?.let(openUrl)
+        mutableState.value.targetArticles.mapNotNull { it.link }.forEach(openUrl)
+    }
+
+    /** 操作の対象の記事の [content] を、1 件を 1 行にしてクリップボードへ写す。対象が無ければ何もしない。 */
+    override fun copySelected(content: CopyContent) {
+        mutableState.value.targetArticles
+            .mapNotNull { article ->
+                when (content) {
+                    CopyContent.URL -> article.link
+                    CopyContent.TITLE -> article.title
+                    CopyContent.TITLE_AND_URL -> listOfNotNull(article.title, article.link).joinToString(" ")
+                }
+            }
+            .takeIf { it.isNotEmpty() }
+            ?.let { copyText(it.joinToString("\n")) }
     }
 
     override fun openLink(url: String) {
@@ -157,28 +200,42 @@ class MainViewModel(
         mutableState.value.lastUnreadIndex?.let(::selectArticle)
     }
 
-    /** 選んでいる記事の閲覧状況を 未読 → 既読 → 保護 の順（[forward] が false なら逆順）で切り替える。 */
+    /**
+     * 操作の対象の記事の閲覧状況を 未読 → 既読 → 保護 の順（[forward] が false なら逆順）で切り替える。
+     *
+     * 対象が複数あるときは、表示している記事（対象に入っていなければ先頭の対象）の次の状況に、全てをそろえる。
+     */
     override fun cycleSelectedState(forward: Boolean) {
         val current = mutableState.value
-        val index = current.selectedArticleIndex ?: return
-        val article = current.articles.getOrNull(index) ?: return
-        changeState(index, article.state.cycled(forward))
+        val targets = current.targetArticles
+        val reference = current.selectedArticle?.takeIf { it in targets } ?: targets.firstOrNull() ?: return
+        changeStates(targets, reference.state.cycled(forward))
     }
 
-    /** 選んでいる記事を削除する。選択は同じ位置に残す。 */
-    override fun deleteSelectedArticle() {
+    /** 操作の対象の記事の閲覧状況を [state] にする。 */
+    override fun setSelectedState(state: ArticleState) {
+        changeStates(mutableState.value.targetArticles, state)
+    }
+
+    /** 操作の対象の記事を削除する。表示していた記事を消したら、同じ位置に来た記事を選ぶ。 */
+    override fun deleteSelectedArticles() {
         val current = mutableState.value
-        val index = current.selectedArticleIndex ?: return
-        val article = current.articles.getOrNull(index) ?: return
-        loadedArticles = loadedArticles.filterNot { it.id == article.id }
-        adjustCount(article.channelId, totalDelta = -1, unreadDelta = if (article.state == ArticleState.UNREAD) -1 else 0)
+        val targets = current.targetArticles.ifEmpty { return }
+        val removedIds = targets.map { it.id }.toSet()
+        loadedArticles = loadedArticles.filterNot { it.id in removedIds }
+        targets.forEach { article ->
+            adjustCount(article.channelId, totalDelta = -1, unreadDelta = -unreadWeight(article.state))
+        }
         mutableState.update { state ->
-            val remaining = state.articles.filterNot { it.id == article.id }
-            state.copy(articles = remaining, selectedArticleIndex = index.coerceAtMost(remaining.lastIndex).takeIf { it >= 0 })
-                .withTree()
+            val remaining = state.articles.filterNot { it.id in removedIds }
+            // 表示していた記事より上で消えた分だけ、位置を上へ詰める。
+            val index = state.selectedArticleIndex?.let { selected ->
+                (selected - state.articles.take(selected).count { it.id in removedIds }).coerceAtMost(remaining.lastIndex).takeIf { it >= 0 }
+            }
+            state.copy(articles = remaining, selectedArticleIndex = index).withoutMarks().withTree()
         }
         showSelectedContent()
-        scope.launch { store.deleteArticle(article.id, now()) }
+        scope.launch { store.deleteArticles(removedIds, now()) }
     }
 
     /** 全てのチャンネルを更新する。更新中なら中止する。 */
@@ -433,20 +490,17 @@ class MainViewModel(
         if (result.failed > 0) append("  失敗 ${result.failed} 件")
     }
 
-    private fun changeState(index: Int, newState: ArticleState) {
-        val article = mutableState.value.articles.getOrNull(index)?.takeIf { it.state != newState } ?: return
-        val changed = article.copy(state = newState)
-        loadedArticles = loadedArticles.map { if (it.id == article.id) changed else it }
-        adjustCount(
-            channelId = article.channelId,
-            totalDelta = 0,
-            unreadDelta = unreadWeight(newState) - unreadWeight(article.state),
-        )
-        // 読んでいる途中で行が動かないよう、並べ直さずにその行だけを差し替える。
-        mutableState.update { state ->
-            state.copy(articles = state.articles.map { if (it.id == article.id) changed else it }).withTree()
+    private fun changeStates(articles: List<ArticleRow>, newState: ArticleState) {
+        val changing = articles.filter { it.state != newState }.ifEmpty { return }
+        val changingIds = changing.map { it.id }.toSet()
+        fun changed(article: ArticleRow) = if (article.id in changingIds) article.copy(state = newState) else article
+        loadedArticles = loadedArticles.map(::changed)
+        changing.forEach { article ->
+            adjustCount(article.channelId, totalDelta = 0, unreadDelta = unreadWeight(newState) - unreadWeight(article.state))
         }
-        scope.launch { store.setArticleState(article.id, newState) }
+        // 読んでいる途中で行が動かないよう、並べ直さずにその行だけを差し替える。
+        mutableState.update { state -> state.copy(articles = state.articles.map(::changed)).withTree() }
+        scope.launch { store.setArticleStates(changingIds, newState) }
     }
 
     private fun unreadWeight(state: ArticleState): Int = if (state == ArticleState.UNREAD) 1 else 0
@@ -482,14 +536,16 @@ class MainViewModel(
         totalCount = tree.totalCount,
     )
 
-    /** 一覧を作り直す。行の並びが変わるので選択は外す。 */
+    private fun MainUiState.withoutMarks(): MainUiState = copy(markedArticleIds = emptySet(), markRangeEndIndex = null)
+
+    /** 一覧を作り直す。行の並びが変わるので選択と印は外す。 */
     private fun MainUiState.withArrangedArticles(): MainUiState {
         contentJob?.cancel()
         return copy(
             articles = arrangeArticles(loadedArticles, filter, sort, channelNames),
             selectedArticleIndex = null,
             articleContent = null,
-        )
+        ).withoutMarks()
     }
 
     private companion object {

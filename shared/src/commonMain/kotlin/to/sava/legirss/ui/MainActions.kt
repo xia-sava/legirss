@@ -12,6 +12,7 @@ import androidx.compose.ui.input.key.type
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import to.sava.legirss.model.AppSettings
+import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.TreeDropPlace
 
 /** メイン画面から呼ぶ操作。 */
@@ -28,13 +29,23 @@ interface MainActions {
 
     fun selectArticle(index: Int)
 
+    fun markArticlesTo(index: Int)
+
+    fun toggleArticleMark(index: Int)
+
+    fun markAllArticles()
+
     fun readOn()
 
     fun cycleSelectedState(forward: Boolean)
 
-    fun deleteSelectedArticle()
+    fun setSelectedState(state: ArticleState)
+
+    fun deleteSelectedArticles()
 
     fun openSelectedArticle()
+
+    fun copySelected(content: CopyContent)
 
     fun openLink(url: String)
 
@@ -105,7 +116,8 @@ fun MainActions.handleKey(
         event.key == Key.Enter && plain -> openSelectedArticle()
         event.key == Key.DirectionRight && plain -> cycleSelectedState(forward = true)
         event.key == Key.DirectionLeft && plain -> cycleSelectedState(forward = false)
-        event.key == Key.Delete && plain -> deleteSelectedArticle()
+        event.key == Key.Delete && plain -> deleteSelectedArticles()
+        event.key == Key.L && event.isCtrlPressed -> copySelected(CopyContent.URL)
         else -> return false
     }
     return true
