@@ -177,4 +177,16 @@ class FeedParserTest {
         assertEquals("https://example.com/a/", resolveUrl("https://example.com/a/b/c", ".."))
         assertEquals("https://example.com/x?q=1", resolveUrl("https://example.com/a/b", "../x?q=1"))
     }
+
+    /** 基準の URL のクエリとフラグメントは、解決した URL に引き継がない。クエリを引き継ぐのは、参照がフラグメントだけのときに限る。 */
+    @Test
+    fun dropsQueryAndFragmentOfBase() {
+        val base = "https://example.com/a/?feed=rss2#top"
+
+        assertEquals("https://example.com/?p=1", resolveUrl(base, "https://example.com/?p=1"))
+        assertEquals("https://example.com/a/c", resolveUrl(base, "c"))
+        assertEquals("https://example.com/c?p=1", resolveUrl(base, "/c?p=1"))
+        assertEquals("https://example.com/a/?p=1", resolveUrl(base, "?p=1"))
+        assertEquals("https://example.com/a/?feed=rss2#more", resolveUrl(base, "#more"))
+    }
 }

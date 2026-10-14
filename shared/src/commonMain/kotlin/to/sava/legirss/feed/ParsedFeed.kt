@@ -25,11 +25,23 @@ data class ParsedItem(
     val identity: String get() = guid ?: link ?: title
 }
 
-/** [reference] を [base] からの相対 URL として解決する。解決できなければ [reference] をそのまま返す。 */
+/**
+ * [reference] を [base] からの相対 URL として解決する。解決できなければ [reference] をそのまま返す。
+ *
+ * [base] のフラグメントは引き継がない。[base] のクエリを引き継ぐのは、[reference] がフラグメントだけか空のときに限る。
+ */
 fun resolveUrl(base: String?, reference: String): String {
     if (base.isNullOrBlank()) return reference
+    val keepsBaseQuery = reference.isEmpty() || reference.startsWith(FRAGMENT_PREFIX)
     return try {
-        URLBuilder(base).takeFrom(reference).apply { encodedPathSegments = withoutDotSegments(encodedPathSegments) }.buildString()
+        URLBuilder(base)
+            .apply {
+                encodedFragment = ""
+                if (!keepsBaseQuery) encodedParameters.clear()
+            }
+            .takeFrom(reference)
+            .apply { encodedPathSegments = withoutDotSegments(encodedPathSegments) }
+            .buildString()
     } catch (_: URLParserException) {
         reference
     } catch (_: IllegalArgumentException) {
@@ -37,6 +49,7 @@ fun resolveUrl(base: String?, reference: String): String {
     }
 }
 
+private const val FRAGMENT_PREFIX = "#"
 private const val CURRENT_SEGMENT = "."
 private const val PARENT_SEGMENT = ".."
 
