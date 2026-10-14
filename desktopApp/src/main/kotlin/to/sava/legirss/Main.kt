@@ -162,6 +162,7 @@ fun main(args: Array<String>) {
                 }
         }
 
+        LaunchedEffect(windowVisible) { viewModel.setWindowVisible(windowVisible) }
         LaunchedEffect(Unit) { viewModel.runAutomaticUpdates() }
         LaunchedEffect(Unit) { runDailyBackups(backup) }
 
@@ -244,24 +245,24 @@ fun main(args: Array<String>) {
                 }
             },
         ) {
+            val contentFocus = remember(window) { WindowContentFocus(window) }
             DisposableEffect(window) {
                 browser.ownerWindow = window
                 val focusLog = WindowFocusLog(window)
                 window.addWindowFocusListener(focusLog)
+                contentFocus.install()
                 onDispose {
+                    contentFocus.remove()
                     window.removeWindowFocusListener(focusLog)
                     browser.ownerWindow = null
                 }
             }
-            // しまっていたウィンドウを出したときは、ほかのウィンドウの前へ持ってくる。
-            // キーを受け取るのはウィンドウの中の部品なので、ウィンドウを手前へ出したあとに表示を伝えて、
-            // 一覧へのフォーカスの要求でフォーカスを中の部品へ移す。
+            // しまっていたウィンドウを出したときは、ほかのウィンドウの前へ持ってきて、キーを受け取れるようにする。
             LaunchedEffect(windowVisible) {
                 if (windowVisible) {
                     window.toFront()
-                    window.requestFocus()
+                    contentFocus.request()
                 }
-                viewModel.setWindowVisible(windowVisible)
             }
             CompositionLocalProvider(LocalLegirssStyle provides style) {
                 MainScreen(
