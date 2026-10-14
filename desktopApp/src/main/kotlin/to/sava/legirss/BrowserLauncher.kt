@@ -27,10 +27,7 @@ internal class BrowserLauncher {
     /** [url] を開く。すぐに戻り、開く処理は裏で進む。開けなかった場合は理由を記録する。 */
     fun open(url: String) {
         opener.execute {
-            val requestedAt = System.currentTimeMillis()
-            if (!browse(url)) return@execute
-            AppLog.info("ブラウザを開く呼び出しが戻りました: ${System.currentTimeMillis() - requestedAt} ms")
-            SwingUtilities.invokeLater { ownerWindow?.takeIf { it.isVisible }?.let(::bringBackWhenCovered) }
+            if (browse(url)) SwingUtilities.invokeLater { ownerWindow?.takeIf { it.isVisible }?.let(::bringBackWhenCovered) }
         }
     }
 
@@ -47,33 +44,14 @@ internal class BrowserLauncher {
             false
         }
 
-    /**
-     * [window] が手前でなくなるのを待って、手前へ戻す。一定の時間のうちに変わらなければ何もしない。
-     *
-     * 手前へ戻すのは 1 度だけ。その前後で [window] が手前かどうかが変わるたびに、フォーカスの状態を記録する。
-     */
+    /** [window] が手前でなくなるのを待って、手前へ戻す。一定の時間のうちに変わらなければ何もしない。 */
     private fun bringBackWhenCovered(window: Window) {
-        val startedAt = System.currentTimeMillis()
-        fun record(event: String) = AppLog.info("$event: ${System.currentTimeMillis() - startedAt} ms ${window.describeFocus()}")
-
         var remainingChecks = MAX_CHECKS
-        var broughtBack = false
-        var wasActive = window.isActive
-        record("手前へ戻す監視を始めます")
         Timer(CHECK_INTERVAL_MILLIS) { event ->
             remainingChecks -= 1
-            val active = window.isActive
-            if (active != wasActive) record(if (active) "ウィンドウが手前になりました" else "ウィンドウが手前でなくなりました")
-            wasActive = active
-            if (!active && !broughtBack) {
-                broughtBack = true
-                bringToFront(window)
-                record("手前へ戻す要求を出しました")
-            }
-            if (remainingChecks <= 0) {
-                record("手前へ戻す監視を終えます")
-                (event.source as Timer).stop()
-            }
+            val covered = !window.isActive
+            if (covered) bringToFront(window)
+            if (covered || remainingChecks <= 0) (event.source as Timer).stop()
         }.start()
     }
 

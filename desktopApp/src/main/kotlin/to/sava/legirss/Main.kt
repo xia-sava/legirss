@@ -248,12 +248,9 @@ fun main(args: Array<String>) {
             val contentFocus = remember(window) { WindowContentFocus(window) }
             DisposableEffect(window) {
                 browser.ownerWindow = window
-                val focusLog = WindowFocusLog(window)
-                window.addWindowFocusListener(focusLog)
                 contentFocus.install()
                 onDispose {
                     contentFocus.remove()
-                    window.removeWindowFocusListener(focusLog)
                     browser.ownerWindow = null
                 }
             }
