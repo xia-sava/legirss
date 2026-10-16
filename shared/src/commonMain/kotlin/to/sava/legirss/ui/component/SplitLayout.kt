@@ -2,8 +2,6 @@ package to.sava.legirss.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -15,7 +13,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -45,7 +46,8 @@ fun HorizontalSplit(
             Splitter(
                 orientation = Orientation.Horizontal,
                 pointerIcon = HorizontalResizePointerIcon,
-                onDrag = { onFirstWidthChange(width + it) },
+                size = width,
+                onResize = onFirstWidthChange,
                 modifier = Modifier.width(thickness).fillMaxHeight(),
             )
             Box(Modifier.weight(1f).fillMaxHeight()) { second() }
@@ -70,7 +72,8 @@ fun VerticalSplit(
             Splitter(
                 orientation = Orientation.Vertical,
                 pointerIcon = VerticalResizePointerIcon,
-                onDrag = { onFirstHeightChange(height + it) },
+                size = height,
+                onResize = onFirstHeightChange,
                 modifier = Modifier.height(thickness).fillMaxWidth(),
             )
             Box(Modifier.weight(1f).fillMaxWidth()) { second() }
@@ -78,22 +81,30 @@ fun VerticalSplit(
     }
 }
 
+/**
+ * 2 つの領域の境目。ドラッグで手前の領域の大きさを変える。
+ *
+ * @param size いまの手前の領域の大きさ。ドラッグを始めたときの大きさに、マウスの移動量を足した大きさを [onResize] に伝える。
+ */
 @Composable
 private fun Splitter(
     orientation: Orientation,
     pointerIcon: PointerIcon,
-    onDrag: (Dp) -> Unit,
+    size: Dp,
+    onResize: (Dp) -> Unit,
     modifier: Modifier,
 ) {
     val density = LocalDensity.current
-    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentSize by rememberUpdatedState(size)
+    var startSize by remember { mutableStateOf(size) }
     Box(
         modifier
             .background(LocalLegirssStyle.current.colors.panel)
             .pointerHoverIcon(pointerIcon)
-            .draggable(
-                state = rememberDraggableState { delta -> currentOnDrag(with(density) { delta.toDp() }) },
+            .dragInRoot(
                 orientation = orientation,
+                onStart = { startSize = currentSize },
+                onDrag = { distance -> onResize(startSize + with(density) { distance.toDp() }) },
             ),
     )
 }
