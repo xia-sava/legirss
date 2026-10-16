@@ -47,7 +47,7 @@ import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
 import to.sava.legirss.ui.ScreenLayout
-import to.sava.legirss.ui.ToolbarNotice
+import to.sava.legirss.ui.StatusNotice
 import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
@@ -200,7 +200,7 @@ fun main(args: Array<String>) {
                     windowVisible = true
                     viewModel.openSettings()
                 },
-                // 結果はツールバーに出すので、ウィンドウを表示してから確かめる。
+                // 結果はステータスバーに出すので、ウィンドウを表示してから確かめる。
                 onCheckAppUpdate = {
                     windowVisible = true
                     appUpdater.checkNow()
@@ -237,14 +237,24 @@ fun main(args: Array<String>) {
                 when {
                     // ダイアログを手前に出している間は、後ろの画面のキー操作を受け付けない。
                     state.dialog != null -> false
+                    // Esc はメニューのショートカットに届かないので、ここで受ける。
                     event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
                         windowVisible = false
                         true
                     }
-                    else -> viewModel.handleKey(event, state.selectedArticle != null, articleScroll, scope)
+                    else -> viewModel.handleKey(event)
                 }
             },
         ) {
+            AppMenuBar(
+                state = state,
+                actions = viewModel,
+                articleScroll = articleScroll,
+                onCloseWindow = { windowVisible = false },
+                onExit = ::exitApplication,
+                onCheckAppUpdate = appUpdater::checkNow,
+                canCheckAppUpdate = installer.isSupported,
+            )
             val contentFocus = remember(window) { WindowContentFocus(window) }
             DisposableEffect(window) {
                 browser.ownerWindow = window
@@ -268,7 +278,7 @@ fun main(args: Array<String>) {
                     articleScroll = articleScroll,
                     layout = layout,
                     onLayoutChange = { layout = it },
-                    toolbarNotice = updateNoticeOf(updateState, onInstall = appUpdater::install),
+                    statusNotice = updateNoticeOf(updateState, onInstall = appUpdater::install),
                 )
             }
         }
@@ -286,15 +296,15 @@ private suspend fun removeOldDownloads(installer: UpdateInstaller) {
     }
 }
 
-/** アプリの更新の状況を、ツールバーに出す通知にする。出す通知が無ければ null を返す。 */
-private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): ToolbarNotice? = when (state) {
+/** アプリの更新の状況を、ステータスバーに出す通知にする。出す通知が無ければ null を返す。 */
+private fun updateNoticeOf(state: UpdateState, onInstall: () -> Unit): StatusNotice? = when (state) {
     UpdateState.Idle -> null
-    is UpdateState.Available -> ToolbarNotice("新しい版 ${state.release.version} に更新して再起動", onInstall)
-    is UpdateState.Installing -> ToolbarNotice("新しい版 ${state.release.version} を取得中…", onClick = null)
-    is UpdateState.Failed -> ToolbarNotice("更新できませんでした。もう一度試す", onInstall)
-    UpdateState.Checking -> ToolbarNotice("アプリの更新を確認中…", onClick = null)
-    UpdateState.UpToDate -> ToolbarNotice("最新の版です", onClick = null)
-    UpdateState.CheckFailed -> ToolbarNotice("アプリの更新を確認できませんでした", onClick = null)
+    is UpdateState.Available -> StatusNotice("新しい版 ${state.release.version} に更新して再起動", onInstall)
+    is UpdateState.Installing -> StatusNotice("新しい版 ${state.release.version} を取得中…", onClick = null)
+    is UpdateState.Failed -> StatusNotice("更新できませんでした。もう一度試す", onInstall)
+    UpdateState.Checking -> StatusNotice("アプリの更新を確認中…", onClick = null)
+    UpdateState.UpToDate -> StatusNotice("最新の版です", onClick = null)
+    UpdateState.CheckFailed -> StatusNotice("アプリの更新を確認できませんでした", onClick = null)
 }
 
 private fun trayStateOf(state: MainUiState): TrayState =

@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import to.sava.legirss.model.AppSettings
 import to.sava.legirss.model.ArticleState
 import to.sava.legirss.ui.component.TreeDropPlace
-import to.sava.legirss.ui.component.isEnterKey
 
 /** メイン画面から呼ぶ操作。 */
 interface MainActions {
@@ -92,39 +91,33 @@ interface MainActions {
 }
 
 /**
- * メイン画面のキー操作。一覧の中の移動（↑↓ など）は一覧が自分で処理するので、ここには来ない。
+ * メイン画面のキー操作のうち、メニューの項目に載せないもの。
  *
- * @param hasSelectedArticle 記事を選んでいるか。
- * @param articleScroll 記事の表示領域のスクロール位置。
+ * キー操作はメニューの項目のショートカットとして受ける。項目に付けられるショートカットは 1 つなので、
+ * 同じ操作に割り当てた 2 つ目のキーをここで受ける。一覧の中の移動（↑↓ など）は一覧が自分で処理するので、ここには来ない。
+ *
  * @return 処理したら true。
  */
-fun MainActions.handleKey(
-    event: KeyEvent,
-    hasSelectedArticle: Boolean,
-    articleScroll: ScrollState,
-    scope: CoroutineScope,
-): Boolean {
+fun MainActions.handleKey(event: KeyEvent): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
     val plain = !event.isCtrlPressed && !event.isAltPressed && !event.isShiftPressed
-    when {
-        event.key == Key.F2 && event.isAltPressed -> updateSelected()
-        event.key == Key.F2 -> updateAll()
-        event.key == Key.F3 -> openAddChannel()
-        event.key == Key.F5 -> reloadList()
-        event.key == Key.K && event.isCtrlPressed -> cycleFilter()
-        // 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の未読へ進む。
-        event.key == Key.Spacebar && plain -> when {
-            hasSelectedArticle -> scope.launch { if (!articleScroll.pageDown()) readOn() }
-            else -> readOn()
-        }
-        event.key == Key.Spacebar && event.isShiftPressed -> scope.launch { articleScroll.pageUp() }
-        event.isEnterKey && plain -> openSelectedArticle()
-        (event.key == Key.DirectionRight || event.key == Key.DirectionLeft) && plain -> toggleSelectedState()
-        event.key == Key.Delete && plain -> deleteSelectedArticles()
-        event.key == Key.L && event.isCtrlPressed -> copySelected(CopyContent.URL)
-        else -> return false
-    }
+    if (event.key != Key.DirectionLeft || !plain) return false
+    toggleSelectedState()
     return true
+}
+
+/** 記事を選んでいれば本文を先へ送り、末尾まで読んでいたら次の未読へ進む。 */
+fun MainActions.readNextPage(hasSelectedArticle: Boolean, articleScroll: ScrollState, scope: CoroutineScope) {
+    if (!hasSelectedArticle) {
+        readOn()
+        return
+    }
+    scope.launch { if (!articleScroll.pageDown()) readOn() }
+}
+
+/** 記事の本文を 1 画面ぶん前へ戻す。 */
+fun pageBack(articleScroll: ScrollState, scope: CoroutineScope) {
+    scope.launch { articleScroll.pageUp() }
 }
 
 // 1 回で送る量。読んでいた位置を見失わないよう、表示範囲より少し短くする。

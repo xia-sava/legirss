@@ -21,12 +21,12 @@ import to.sava.legirss.ui.theme.LocalLegirssStyle
 private val BUTTON_PADDING = 8.dp
 
 /**
- * ツールバーに置く、文字だけのボタン。マウスを載せると背景が変わる。
+ * 文字だけのボタン。マウスを載せると背景が変わる。
  *
  * @param emphasized 目に留まるよう、背景と文字に色を付けて出す。
  */
 @Composable
-fun ToolbarButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, emphasized: Boolean = false) {
+fun TextButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, emphasized: Boolean = false) {
     val style = LocalLegirssStyle.current
     val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()

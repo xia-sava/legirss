@@ -45,10 +45,10 @@ internal object MainScreenRenderer {
         fontFamily = FontFamily(SystemFont(UI_FONT_NAME), SystemFont(UI_FONT_NAME, FontWeight.Bold)),
     )
 
-    fun render(state: MainUiState, toolbarNotice: ToolbarNotice? = null): Image =
+    fun render(state: MainUiState, statusNotice: StatusNotice? = null): Image =
         ImageComposeScene(WIDTH, HEIGHT, Density(1f)) {
             CompositionLocalProvider(LocalLegirssStyle provides style) {
-                MainScreen(state, NoActions, rememberScrollState(), ScreenLayout(), onLayoutChange = {}, toolbarNotice = toolbarNotice)
+                MainScreen(state, NoActions, rememberScrollState(), ScreenLayout(), onLayoutChange = {}, statusNotice = statusNotice)
             }
         }.use { scene ->
             // 遅延リストの中身は 2 回目の描画で確定する。
@@ -135,12 +135,12 @@ class MainScreenRenderTest {
         assertEquals(MainScreenRenderer.WIDTH to MainScreenRenderer.HEIGHT, image.width to image.height)
     }
 
-    /** ツールバーの右端の通知を、押せるものと押せないものの両方で描画できる。 */
+    /** ステータスバーの右端の通知を、押せるものと押せないものの両方で描画できる。 */
     @Test
-    fun rendersToolbarNotice() {
+    fun rendersStatusNotice() {
         val notices = mapOf(
-            "toolbar-notice-button.png" to ToolbarNotice("新しい版 1.2.3 に更新して再起動", onClick = {}),
-            "toolbar-notice-text.png" to ToolbarNotice("最新の版です", onClick = null),
+            "status-notice-button.png" to StatusNotice("新しい版 1.2.3 に更新して再起動", onClick = {}),
+            "status-notice-text.png" to StatusNotice("最新の版です", onClick = null),
         )
 
         notices.forEach { (fileName, notice) ->

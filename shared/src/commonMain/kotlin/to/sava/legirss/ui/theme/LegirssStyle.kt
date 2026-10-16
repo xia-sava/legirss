@@ -46,7 +46,6 @@ data class LegirssStyle(
     val treeFontSize: TextUnit = 12.sp,
     val listFontSize: TextUnit = 13.sp,
     val articleFontSize: TextUnit = 14.sp,
-    val toolbarHeight: Dp = 24.dp,
     val statusBarHeight: Dp = 20.dp,
     val headerHeight: Dp = 20.dp,
     val splitterThickness: Dp = 5.dp,

@@ -61,10 +61,9 @@ import to.sava.legirss.ui.component.HtmlContent
 import to.sava.legirss.ui.component.MenuEntry
 import to.sava.legirss.ui.component.PopupMenu
 import to.sava.legirss.ui.component.RowSelectMode
-import to.sava.legirss.ui.component.SegmentedButtons
 import to.sava.legirss.ui.component.TableColumn
 import to.sava.legirss.ui.component.TableText
-import to.sava.legirss.ui.component.ToolbarButton
+import to.sava.legirss.ui.component.TextButton
 import to.sava.legirss.ui.component.TreeIcon
 import to.sava.legirss.ui.component.TreeRow
 import to.sava.legirss.ui.component.TreeView
@@ -76,7 +75,7 @@ import to.sava.legirss.ui.theme.LocalLegirssStyle
 import to.sava.legirss.update.UpdateProgress
 
 private val BAR_PADDING = 4.dp
-private val TOOLBAR_GROUP_GAP = 8.dp
+private val STATUS_GROUP_GAP = 8.dp
 private val STATE_ICON_SIZE = 9.dp
 private val ARTICLE_PANE_PADDING = 8.dp
 private val SCROLLBAR_WIDTH = 10.dp
@@ -85,12 +84,6 @@ private val ARTICLE_LINE_SCROLL = 40.dp
 
 // PageUp と PageDown で送る量。読んでいた位置を見失わないよう、表示範囲より少し短くする。
 private const val ARTICLE_PAGE_FRACTION = 0.85f
-
-private const val UPDATE_ALL_LABEL = "更新"
-private const val UPDATE_SELECTED_LABEL = "選択更新"
-private const val CANCEL_UPDATE_LABEL = "中止"
-private const val ADD_CHANNEL_LABEL = "追加"
-private const val SETTINGS_LABEL = "設定"
 
 private const val UPDATE_NODE_LABEL = "更新"
 private const val PAUSE_LABEL = "購読中止"
@@ -112,15 +105,15 @@ private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
 private const val DELETE_ARTICLE_LABEL = "削除"
 
-/** ツールバーの右端に出す通知。[onClick] があれば、色を付けた押せるボタンとして出す。 */
+/** ステータスバーの右端に出す通知。[onClick] があれば、色を付けた押せるボタンとして出す。 */
 @Immutable
-data class ToolbarNotice(
+data class StatusNotice(
     val label: String,
     val onClick: (() -> Unit)?,
 )
 
 /**
- * @param toolbarNotice ツールバーの右端に出す通知。出さなければ null。
+ * @param statusNotice ステータスバーの右端に出す通知。出さなければ null。
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、呼び出し側と共有する。
  * @param layout 境目の位置と列の幅。
  * @param onLayoutChange 利用者が境目や列の幅を動かしたときに、動かした後の値を伝える。
@@ -133,11 +126,10 @@ fun MainScreen(
     layout: ScreenLayout,
     onLayoutChange: (ScreenLayout) -> Unit,
     modifier: Modifier = Modifier,
-    toolbarNotice: ToolbarNotice? = null,
+    statusNotice: StatusNotice? = null,
 ) {
-    val style = LocalLegirssStyle.current
     Box(modifier.fillMaxSize()) {
-        MainContent(state, actions, articleScroll, layout, onLayoutChange, toolbarNotice)
+        MainContent(state, actions, articleScroll, layout, onLayoutChange, statusNotice)
         state.dialog?.let { DialogHost(it, state.settings, actions) }
     }
 }
@@ -149,7 +141,7 @@ private fun MainContent(
     articleScroll: ScrollState,
     layout: ScreenLayout,
     onLayoutChange: (ScreenLayout) -> Unit,
-    toolbarNotice: ToolbarNotice?,
+    statusNotice: StatusNotice?,
 ) {
     val style = LocalLegirssStyle.current
     val panes = remember { PaneFocus() }
@@ -161,7 +153,6 @@ private fun MainContent(
                 (event.type == KeyEventType.KeyDown && event.key == Key.F6).also { if (it) panes.moveOn(forward = !event.isShiftPressed) }
             },
     ) {
-        Toolbar(state, actions, toolbarNotice)
         HorizontalSplit(
             firstWidth = layout.treeWidth,
             onFirstWidthChange = { onLayoutChange(layout.copy(treeWidth = it)) },
@@ -185,7 +176,7 @@ private fun MainContent(
                 )
             },
         )
-        StatusBar(state)
+        StatusBar(state, statusNotice)
     }
 }
 
@@ -277,37 +268,6 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
         add(null)
         if (row.icon == TreeIcon.ALL) add(MenuEntry(IMPORT_OPML_MENU_LABEL, onClick = actions::importOpml))
         add(MenuEntry(EXPORT_OPML_MENU_LABEL) { actions.exportOpml(row.key) })
-    }
-}
-
-@Composable
-private fun Toolbar(state: MainUiState, actions: MainActions, notice: ToolbarNotice?) {
-    val style = LocalLegirssStyle.current
-    val updating = state.updateProgress != null
-    Row(
-        modifier = Modifier.fillMaxWidth().height(style.toolbarHeight).padding(horizontal = BAR_PADDING, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ToolbarButton(if (updating) CANCEL_UPDATE_LABEL else UPDATE_ALL_LABEL, onClick = actions::updateAll)
-        if (!updating) ToolbarButton(UPDATE_SELECTED_LABEL, onClick = actions::updateSelected)
-        ToolbarButton(ADD_CHANNEL_LABEL, onClick = actions::openAddChannel)
-        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
-        SegmentedButtons(
-            options = StateFilter.entries,
-            selected = state.filter,
-            label = StateFilter::label,
-            onSelect = actions::setFilter,
-            modifier = Modifier.fillMaxHeight(),
-        )
-        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
-        ToolbarButton(SETTINGS_LABEL, onClick = actions::openSettings)
-        Box(Modifier.weight(1f))
-        notice?.let {
-            when (val onClick = it.onClick) {
-                null -> BasicText(it.label, style = style.textStyle(color = style.colors.textDim))
-                else -> ToolbarButton(it.label, onClick = onClick, emphasized = true)
-            }
-        }
     }
 }
 
@@ -497,7 +457,7 @@ private fun ArticlePane(state: MainUiState, actions: MainActions, scroll: Scroll
 }
 
 @Composable
-private fun StatusBar(state: MainUiState) {
+private fun StatusBar(state: MainUiState, notice: StatusNotice?) {
     val style = LocalLegirssStyle.current
     val borderColor = style.colors.border
     Row(
@@ -520,8 +480,18 @@ private fun StatusBar(state: MainUiState) {
             style = style.textStyle(),
             maxLines = 1,
         )
-        Spacer(Modifier.width(TOOLBAR_GROUP_GAP))
-        BasicText(text = "表示 ${state.articles.size} 件", style = style.textStyle(color = style.colors.textDim))
+        Spacer(Modifier.width(STATUS_GROUP_GAP))
+        BasicText(
+            text = "表示 ${state.filter.label} ${state.articles.size} 件",
+            style = style.textStyle(color = style.colors.textDim),
+        )
+        notice?.let {
+            Spacer(Modifier.width(STATUS_GROUP_GAP))
+            when (val onClick = it.onClick) {
+                null -> BasicText(it.label, style = style.textStyle(color = style.colors.textDim), maxLines = 1)
+                else -> TextButton(it.label, onClick = onClick, emphasized = true)
+            }
+        }
     }
 }
 
