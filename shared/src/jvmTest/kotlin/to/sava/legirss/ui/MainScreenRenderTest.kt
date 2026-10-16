@@ -1,13 +1,29 @@
 package to.sava.legirss.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.SystemFont
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.use
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
@@ -19,6 +35,8 @@ import to.sava.legirss.model.ArticleState
 import to.sava.legirss.model.ChannelInfo
 import to.sava.legirss.model.NodeKind
 import to.sava.legirss.model.TreeNode
+import to.sava.legirss.ui.component.DialogFrame
+import to.sava.legirss.ui.component.LocalDialogFrame
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import java.lang.reflect.Proxy
@@ -34,6 +52,31 @@ private val NoActions: MainActions = Proxy.newProxyInstance(
     arrayOf(MainActions::class.java),
 ) { _, _, _ -> null } as MainActions
 
+/**
+ * ダイアログを、画面の中央に重ねて描く枠。題名を OS のタイトルバーの代わりに上端へ描く。
+ *
+ * アプリでは OS のダイアログに出すが、画面に出さない描画ではウィンドウを作れないため、これで代える。
+ */
+private object OverlayDialogFrame : DialogFrame {
+    private val TITLE_BAR_HEIGHT = 24.dp
+    private val TITLE_PADDING = 8.dp
+    private val BORDER_WIDTH = 1.dp
+    private val SCRIM_COLOR = Color(0x33000000)
+
+    @Composable
+    override fun Show(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+        val style = LocalLegirssStyle.current
+        Box(Modifier.fillMaxSize().background(SCRIM_COLOR), contentAlignment = Alignment.Center) {
+            Column(Modifier.width(IntrinsicSize.Max).border(BORDER_WIDTH, style.colors.border).background(style.colors.background)) {
+                Box(Modifier.fillMaxWidth().height(TITLE_BAR_HEIGHT).padding(horizontal = TITLE_PADDING), contentAlignment = Alignment.CenterStart) {
+                    BasicText(title, style = style.textStyle())
+                }
+                content()
+            }
+        }
+    }
+}
+
 /** メイン画面を画面に出さずに描画し、画像として保存する。 */
 internal object MainScreenRenderer {
     const val WIDTH = 1100
@@ -47,7 +90,7 @@ internal object MainScreenRenderer {
 
     fun render(state: MainUiState, statusNotice: StatusNotice? = null): Image =
         ImageComposeScene(WIDTH, HEIGHT, Density(1f)) {
-            CompositionLocalProvider(LocalLegirssStyle provides style) {
+            CompositionLocalProvider(LocalLegirssStyle provides style, LocalDialogFrame provides OverlayDialogFrame) {
                 MainScreen(state, NoActions, rememberScrollState(), ScreenLayout(), onLayoutChange = {}, statusNotice = statusNotice)
             }
         }.use { scene ->

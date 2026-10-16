@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,26 +25,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 
-private val SCRIM_COLOR = Color(0x33000000)
 private val DEFAULT_DIALOG_WIDTH = 440.dp
 private val DIALOG_PADDING = 12.dp
 private val DIALOG_ITEM_GAP = 8.dp
@@ -58,10 +52,23 @@ private val BUTTON_MIN_WIDTH = 76.dp
 private val BUTTON_PADDING = 10.dp
 private val CHECKBOX_SIZE = 13.dp
 
+/** ダイアログの中身を、閉じるまで後ろの画面を操作させない枠に入れて出す。 */
+fun interface DialogFrame {
+    /**
+     * @param title ダイアログの題名。
+     * @param onDismiss 利用者が閉じようとした（Esc を押したなど）。
+     */
+    @Composable
+    fun Show(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit)
+}
+
+/** ダイアログを入れる枠。アプリでは OS のダイアログを使う。 */
+val LocalDialogFrame = staticCompositionLocalOf<DialogFrame> { error("ダイアログの枠が渡されていません") }
+
 /**
- * 画面の手前に出して、閉じるまで後ろの画面を操作させないダイアログ。Esc で閉じる。
+ * 閉じるまで後ろの画面を操作させないダイアログ。枠は [LocalDialogFrame] から受け取る。
  *
- * 中に文字の入力欄が無ければ、キーを受けられるようダイアログそのものにフォーカスを置く。
+ * 中に文字の入力欄が無ければ、キーを受けられるようダイアログの中身そのものにフォーカスを置く。
  */
 @Composable
 fun ModalDialog(
@@ -73,31 +80,18 @@ fun ModalDialog(
 ) {
     val style = LocalLegirssStyle.current
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(SCRIM_COLOR)
-            // 後ろの画面へクリックを通さない。
-            .pointerInput(Unit) { detectTapGestures { } }
-            .onPreviewKeyEvent { event ->
-                (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
+    LocalDialogFrame.current.Show(title, onDismiss) {
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .width(width)
-                .border(BORDER_WIDTH, style.colors.border)
                 .background(style.colors.panel)
                 .focusRequester(focusRequester)
                 .focusable()
                 .padding(DIALOG_PADDING),
             verticalArrangement = Arrangement.spacedBy(DIALOG_ITEM_GAP),
-        ) {
-            BasicText(title, style = style.textStyle(bold = true))
-            content()
-        }
+            content = content,
+        )
     }
 }
 

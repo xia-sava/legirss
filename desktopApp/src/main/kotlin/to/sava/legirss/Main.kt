@@ -47,6 +47,7 @@ import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.MainViewModel
 import to.sava.legirss.ui.ScreenLayout
+import to.sava.legirss.ui.component.LocalDialogFrame
 import to.sava.legirss.ui.StatusNotice
 import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
@@ -271,7 +272,7 @@ fun main(args: Array<String>) {
                     contentFocus.request()
                 }
             }
-            CompositionLocalProvider(LocalLegirssStyle provides style) {
+            CompositionLocalProvider(LocalLegirssStyle provides style, LocalDialogFrame provides WindowDialogFrame) {
                 MainScreen(
                     state = state,
                     actions = viewModel,
