@@ -44,6 +44,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -103,6 +104,10 @@ private const val COPY_URL_LABEL = "URL をコピー"
 private const val COPY_TITLE_LABEL = "タイトルをコピー"
 private const val COPY_TITLE_AND_URL_LABEL = "タイトルと URL をコピー"
 private const val DELETE_ARTICLE_LABEL = "削除"
+
+/** 画面のテストで、ツリーと一覧を見分けるための印。 */
+internal const val TREE_TEST_TAG = "tree"
+internal const val ARTICLE_LIST_TEST_TAG = "articleList"
 
 /** ステータスバーの右端に出す通知。[onClick] があれば、色を付けた押せるボタンとして出す。 */
 @Immutable
@@ -223,7 +228,7 @@ private fun TreePane(state: MainUiState, actions: MainActions, panes: PaneFocus)
             },
             onMove = actions::moveNode,
             onDelete = actions::requestDelete,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().testTag(TREE_TEST_TAG),
             focusRequester = panes.requesterOf(Pane.TREE),
         )
         menu?.let { (key, position) ->
@@ -293,7 +298,7 @@ private fun ArticleTable(
                 menuPosition = position
             },
             onHeaderContextMenu = { headerMenuPosition = it },
-            modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
+            modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)).testTag(ARTICLE_LIST_TEST_TAG),
             focusRequester = focusRequester,
         )
         menuPosition?.let { position ->

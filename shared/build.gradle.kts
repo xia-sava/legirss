@@ -32,6 +32,7 @@ kotlin {
             implementation(libs.sqldelight.sqliteDriver)
         }
         jvmTest.dependencies {
+            implementation(libs.compose.uiTest)
             implementation(compose.desktop.currentOs)
         }
     }

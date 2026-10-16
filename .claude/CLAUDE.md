@@ -125,6 +125,13 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 - **画面は、ウィンドウを出さずに描いて確かめられる。** `MainScreenRenderTest` が、画面を PNG にして
   `shared/build/preview/` に出す。配置や見た目を変えたら、ここへ状態を足して画像を見る。
   マウスやキーの操作、フォーカスの移り方、ポップアップの位置は、この方法では確かめられない
+- **クリックやキーの操作とフォーカスの移り方は、ウィンドウを出さずに確かめられる。** `MainScreenUiTest` が、
+  本物の `MainViewModel` をつないだ画面を `runComposeUiTest` で組み立て、クリックやキーの入力を送って状態を見る。
+  画面の操作を変えたら、ここへテストを足す。扱えないものは次のとおり
+  - メニューのショートカット（Space、Ctrl+Space、Enter など）。ウィンドウのメニューが受けるため
+  - Shift や Ctrl を押しながらのクリック。テストの入力はウィンドウの修飾キーを変えないので、
+    `MainScreenUiTest` の `pressedModifiers` で渡す
+  - ウィンドウを出したときのフォーカス、タスクトレイ、本物のウィンドウでのポップアップの位置
 - **アプリを起動して確かめるときは、利用者に断ってからにする。** 利用者の画面を使うため。
   進め方と、終了のあとに見るものは verify-on-device skill を参照
 - データベースの状態は `tools/inspect_db.py` で見られる。読み取り専用で開くので、アプリが動いていても使える
