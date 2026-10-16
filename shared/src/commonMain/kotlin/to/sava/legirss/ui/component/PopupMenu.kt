@@ -21,6 +21,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -46,7 +50,9 @@ private val SEPARATOR_VERTICAL_PADDING = 3.dp
 private val BORDER_WIDTH = 1.dp
 
 /**
- * 右クリックなどで出すメニュー。項目を選ぶか、外を押すと閉じる。
+ * 右クリックなどで出すメニュー。項目を選ぶか、外を押すか、Esc を押すと閉じる。
+ *
+ * 閉じるのに使った Esc は処理済みにして、ウィンドウのキー操作には渡さない。
  *
  * @param entries 並べる項目。null のところには区切り線を引く。
  * @param position メニューの左上を置く位置。このメニューを置いた領域の左上からの距離で表す。
@@ -58,6 +64,9 @@ fun PopupMenu(entries: List<MenuEntry?>, position: IntOffset, onDismiss: () -> U
         popupPositionProvider = remember(position) { MenuPositionProvider(position) },
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
+        onPreviewKeyEvent = { event ->
+            (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
+        },
     ) {
         Column(
             Modifier
