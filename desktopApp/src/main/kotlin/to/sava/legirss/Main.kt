@@ -13,10 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -49,7 +45,6 @@ import to.sava.legirss.ui.MainViewModel
 import to.sava.legirss.ui.ScreenLayout
 import to.sava.legirss.ui.component.LocalDialogFrame
 import to.sava.legirss.ui.StatusNotice
-import to.sava.legirss.ui.handleKey
 import to.sava.legirss.ui.theme.LegirssStyle
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 import to.sava.legirss.update.AppUpdater
@@ -235,16 +230,7 @@ fun main(args: Array<String>) {
             icon = windowIcon,
             state = windowState,
             onKeyEvent = { event ->
-                when {
-                    // ダイアログを手前に出している間は、後ろの画面のキー操作を受け付けない。
-                    state.dialog != null -> false
-                    // Esc はメニューのショートカットに届かないので、ここで受ける。
-                    event.type == KeyEventType.KeyDown && event.key == Key.Escape -> {
-                        windowVisible = false
-                        true
-                    }
-                    else -> viewModel.handleKey(event)
-                }
+                handleWindowKey(event, dialogShown = state.dialog != null, actions = viewModel) { windowVisible = false }
             },
         ) {
             AppMenuBar(

@@ -130,7 +130,8 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
   画面の操作を変えたら、ここへテストを足す。扱えないものは次のとおり
   - メニューのショートカット（Space、Ctrl+Space、Enter など）。ウィンドウのメニューが受けるため、
     `desktopApp` の `AppMenuBarTest` で確かめる。画面に出さないウィンドウにメニューバーを組み込み、
-    項目のショートカットと、項目を選んだときに呼ばれる操作を見る
+    項目のショートカットと、項目を選んだときに呼ばれる操作を見る。メニューに載せないキー（Esc や ←）と、
+    ダイアログを出している間にキーを止める処理は、`handleWindowKey` を `WindowKeysTest` で確かめる
   - Shift や Ctrl を押しながらのクリック。テストの入力はウィンドウの修飾キーを変えないので、
     `MainScreenUiTest` の `pressedModifiers` で渡す
   - ウィンドウを出したときのフォーカス、タスクトレイ、本物のウィンドウでのポップアップの位置
