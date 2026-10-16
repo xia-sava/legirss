@@ -191,11 +191,13 @@ class TrayController(
                 menu.isVisible = false
             }
         })
-        // タスクトレイは画面の端にあるので、メニューはポインタの左上へ開く。
+        // タスクトレイは画面の下端にあるので、メニューはポインタの上へ開く。左下の角から、アイコン 1 つ分だけ右の位置を
+        // ポインタに合わせ、アイコンから真上へ動かせばメニューに入るようにする。画面からはみ出す分は、内側へずれる。
         val size = menu.preferredSize
+        val iconWidth = trayIcon?.size?.width ?: 0
         anchor.setLocation(pointer.x, pointer.y)
         anchor.isVisible = true
-        menu.show(anchor, -size.width, -size.height)
+        menu.show(anchor, -iconWidth, -size.height)
     }
 
     internal fun createMenu(): JPopupMenu = JPopupMenu().apply {
