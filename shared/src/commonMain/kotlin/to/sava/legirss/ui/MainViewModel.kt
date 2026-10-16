@@ -205,7 +205,9 @@ class MainViewModel(
      * 選んだ記事は既読になるので、繰り返すと未読を下から順にたどることになる。
      */
     override fun readOn() {
-        mutableState.value.lastUnreadIndex?.let(::selectArticle)
+        val index = mutableState.value.lastUnreadIndex ?: return
+        selectArticle(index)
+        mutableState.update { it.copy(selectionRevealRequest = it.selectionRevealRequest + 1) }
     }
 
     /**

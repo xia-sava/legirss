@@ -364,6 +364,7 @@ private fun ArticleDataTable(
         scrollResetKey = state.listArrangement,
         // 並べ直したら、読み始める記事（一番古い未読）が見える位置へ移す。未読が無ければ先頭へ戻す。
         scrollResetIndex = state.lastUnreadIndex ?: 0,
+        revealKey = state.selectionRevealRequest,
         sortedColumn = state.sort.column,
         sortDescending = state.sort.descending,
         onColumnClick = actions::sortBy,

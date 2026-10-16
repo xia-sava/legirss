@@ -176,6 +176,25 @@ class MainViewModelTest {
         assertEquals(ArticleCount(total = 3, unread = 0), viewModel.state.value.selectedNodeCount)
     }
 
+    /** 読み進めて記事を選ぶと、一覧の表示を選んだ記事へ移すよう求める。移る先の未読が無ければ求めない。行をクリックして選んだときも求めない。 */
+    @Test
+    fun requestsRevealWhenReadingOn() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        fun requests() = viewModel.state.value.selectionRevealRequest
+
+        viewModel.selectArticle(2)
+        val afterClick = requests()
+        viewModel.readOn()
+        val afterReadOn = requests()
+        viewModel.readOn()
+        viewModel.readOn()
+        val afterAllRead = requests()
+
+        assertEquals(0, afterClick)
+        assertEquals(1, afterReadOn)
+        assertEquals(2, afterAllRead)
+    }
+
     /** 選んでいる行より下に未読が残っていれば、読み進めたときにそちらへ移る。 */
     @Test
     fun readsOnToUnreadBelowSelection() = runTest(UnconfinedTestDispatcher()) {

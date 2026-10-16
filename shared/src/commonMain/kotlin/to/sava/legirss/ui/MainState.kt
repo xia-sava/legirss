@@ -140,6 +140,11 @@ data class MainUiState(
     val listFocusRequest: Int = 0,
     /** 一覧を並べ直すたびに変わる値。変わったら、一覧の表示を、読み始める記事が見える位置へ移す。 */
     val listArrangement: Int = 0,
+    /**
+     * 一覧の外のキー操作（Space など）で記事を選ぶたびに変わる値。
+     * 変わったら、一覧の中のキーで選択を動かしたときと同じく、選んだ記事が見える位置へ一覧の表示を移す。
+     */
+    val selectionRevealRequest: Int = 0,
     /** 手前に出しているダイアログ。出していなければ null。 */
     val dialog: DialogState? = null,
     val settings: AppSettings = AppSettings(),

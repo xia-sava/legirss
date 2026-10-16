@@ -114,6 +114,8 @@ enum class RowSelectMode {
  * @param onHeaderContextMenu 列見出しを右クリックしたときに、押した位置（この一覧の左上からの距離）を伝える。
  * @param scrollResetKey 値が変わるたびに、[scrollResetIndex] の行が表示範囲の中央付近に来るよう表示を移す。
  * @param scrollResetIndex [scrollResetKey] が変わったときに見せる行。
+ * @param revealKey 値が変わるたびに、キー操作で選択を動かしたときと同じく、[cursorIndex] の行が見えるよう表示を移す。
+ *   一覧の外のキー操作で選択を動かしたときに変える。
  * @param sortedColumn 並べ替えの印を出す列。
  * @param onColumnClick 列見出しを、動かさずにクリックした。
  * @param onColumnResize 列の幅を変えた。列見出しの右端をドラッグするか、ダブルクリックして中身に合わせたとき。
@@ -136,6 +138,7 @@ fun <C, R> DataTable(
     onHeaderContextMenu: (IntOffset) -> Unit,
     scrollResetKey: Any?,
     scrollResetIndex: Int,
+    revealKey: Any?,
     sortedColumn: C?,
     sortDescending: Boolean,
     onColumnClick: (C) -> Unit,
@@ -179,6 +182,11 @@ fun <C, R> DataTable(
     LaunchedEffect(scrollResetKey) {
         snapshotFlow { listState.layoutInfo.viewportSize.height }.first { it > 0 }
         listState.bringIntoView(scrollResetIndex.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rowHeightPx, center = true)
+    }
+
+    LaunchedEffect(revealKey) {
+        val laidOut = listState.layoutInfo.visibleItemsInfo.isNotEmpty()
+        if (cursorIndex != null && laidOut) listState.bringIntoView(cursorIndex, rowHeightPx, centerSelection)
     }
 
     // キー操作以外で選択が表示範囲の外へ移ったときも、選択行が見えるようにする。
