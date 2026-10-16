@@ -251,6 +251,8 @@ fun main(args: Array<String>) {
                 state = state,
                 actions = viewModel,
                 articleScroll = articleScroll,
+                layout = layout,
+                onLayoutChange = { layout = it },
                 onCloseWindow = { windowVisible = false },
                 onExit = ::exitApplication,
                 onCheckAppUpdate = appUpdater::checkNow,

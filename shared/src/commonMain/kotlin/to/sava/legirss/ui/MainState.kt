@@ -34,11 +34,16 @@ enum class StateFilter(val label: String) {
     }
 }
 
-enum class ArticleColumn(val title: String) {
-    STATE(""),
+/**
+ * 一覧の列。
+ *
+ * @param hideable 利用者が隠せるか。状態の印とタイトルは、一覧として読めるよう常に出す。
+ */
+enum class ArticleColumn(val title: String, val hideable: Boolean = true) {
+    STATE("", hideable = false),
     DATE("更新日"),
     FETCHED("取得日"),
-    TITLE("タイトル"),
+    TITLE("タイトル", hideable = false),
     CHANNEL("チャンネル"),
     CATEGORY("カテゴリ"),
     AUTHOR("作者"),

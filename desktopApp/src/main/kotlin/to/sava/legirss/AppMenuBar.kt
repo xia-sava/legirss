@@ -14,6 +14,7 @@ import to.sava.legirss.ui.CopyContent
 import to.sava.legirss.ui.MainActions
 import to.sava.legirss.ui.MainUiState
 import to.sava.legirss.ui.NodeSelection
+import to.sava.legirss.ui.ScreenLayout
 import to.sava.legirss.ui.StateFilter
 import to.sava.legirss.ui.pageBack
 import to.sava.legirss.ui.readNextPage
@@ -46,6 +47,7 @@ private const val DELETE_ARTICLE = "削除(D)"
 
 private const val VIEW_MENU = "表示(V)"
 private const val CYCLE_FILTER = "表示する記事の切り替え(K)"
+private const val COLUMNS_MENU = "一覧の列(L)"
 private const val RELOAD_LIST = "一覧を並べ直す(R)"
 
 private const val HELP_MENU = "ヘルプ(H)"
@@ -76,6 +78,7 @@ private fun mnemonicOf(label: String): Char? = MNEMONIC_PATTERN.find(label)?.gro
  * ダイアログを出している間は全ての項目を無効にし、ショートカットも働かせない。
  *
  * @param articleScroll 記事の表示領域のスクロール位置。キー操作で本文を送るために、画面と共有する。
+ * @param layout 一覧の列の並び。出す列を選ぶ項目に使う。
  * @param canCheckAppUpdate アプリの更新を確かめられるか。インストールしたアプリから起動したときだけ true。
  */
 @Composable
@@ -83,6 +86,8 @@ fun FrameWindowScope.AppMenuBar(
     state: MainUiState,
     actions: MainActions,
     articleScroll: ScrollState,
+    layout: ScreenLayout,
+    onLayoutChange: (ScreenLayout) -> Unit,
     onCloseWindow: () -> Unit,
     onExit: () -> Unit,
     onCheckAppUpdate: () -> Unit,
@@ -117,6 +122,14 @@ fun FrameWindowScope.AppMenuBar(
             }
             Command(CYCLE_FILTER, enabled, CYCLE_FILTER_KEY, actions::cycleFilter)
             Separator()
+            Menu(COLUMNS_MENU, mnemonic = mnemonicOf(COLUMNS_MENU), enabled = enabled) {
+                layout.columnOrder.filter { it.hideable }.forEach { column ->
+                    val visible = column !in layout.hiddenColumns
+                    CheckboxItem(column.title, checked = visible, enabled = enabled) {
+                        onLayoutChange(layout.withColumnVisible(column, !visible))
+                    }
+                }
+            }
             Command(RELOAD_LIST, enabled, RELOAD_LIST_KEY, actions::reloadList)
         }
         TopMenu(HELP_MENU) {

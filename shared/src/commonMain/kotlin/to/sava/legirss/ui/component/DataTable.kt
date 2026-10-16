@@ -4,8 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -35,6 +34,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -82,6 +86,10 @@ private val MIN_COLUMN_WIDTH = 20.dp
 private val SCROLLBAR_WIDTH = 10.dp
 private const val SORT_MARK_ASCENDING = "▲"
 private const val SORT_MARK_DESCENDING = "▼"
+private const val DROP_LINE_WIDTH = 2f
+
+// 幅を中身に合わせるときに測る行の数。文字数の多い行から順に測る。
+private const val FIT_SAMPLE_ROWS = 100
 
 /** 行の選び方。 */
 enum class RowSelectMode {
@@ -103,9 +111,14 @@ enum class RowSelectMode {
  * @param isMarked 印を付けた行か。印を付けた行は、選んでいる行と同じ色で示す。
  * @param onSelectAll 全ての行に印を付ける操作（Ctrl+A）をした。
  * @param onContextMenu 行を右クリックしたときに、その行と、押した位置（この一覧の左上からの距離）を伝える。
+ * @param onHeaderContextMenu 列見出しを右クリックしたときに、押した位置（この一覧の左上からの距離）を伝える。
  * @param scrollResetKey 値が変わるたびに、[scrollResetIndex] の行が表示範囲の中央付近に来るよう表示を移す。
  * @param scrollResetIndex [scrollResetKey] が変わったときに見せる行。
  * @param sortedColumn 並べ替えの印を出す列。
+ * @param onColumnClick 列見出しを、動かさずにクリックした。
+ * @param onColumnResize 列の幅を変えた。列見出しの右端をドラッグするか、ダブルクリックして中身に合わせたとき。
+ * @param onColumnMove 列見出しをドラッグして、列を別の列の左へ移した。右端へ移したときは null を伝える。
+ * @param cellText 幅を中身に合わせるときに測る、セルの文字。
  * @param centerSelection キー操作で選択を動かしたとき、選択行を表示範囲の中央付近へ寄せる。
  * @param focusRequester この一覧にフォーカスを移すためのもの。
  */
@@ -120,12 +133,15 @@ fun <C, R> DataTable(
     onSelectIndex: (Int, RowSelectMode) -> Unit,
     onSelectAll: () -> Unit,
     onContextMenu: (Int, IntOffset) -> Unit,
+    onHeaderContextMenu: (IntOffset) -> Unit,
     scrollResetKey: Any?,
     scrollResetIndex: Int,
     sortedColumn: C?,
     sortDescending: Boolean,
     onColumnClick: (C) -> Unit,
     onColumnResize: (C, Dp) -> Unit,
+    onColumnMove: (C, C?) -> Unit,
+    cellText: (R, C) -> String,
     centerSelection: Boolean,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
@@ -141,6 +157,23 @@ fun <C, R> DataTable(
     val headerHeightPx = with(density) { style.headerHeight.roundToPx() }
     val currentRowCount by rememberUpdatedState(rows.size)
     val currentOnContextMenu by rememberUpdatedState(onContextMenu)
+    val currentOnHeaderContextMenu by rememberUpdatedState(onHeaderContextMenu)
+    val textMeasurer = rememberTextMeasurer()
+
+    /** [column] の見出しと、文字数の多い行の中身が収まる幅。 */
+    fun fittingWidth(column: TableColumn<C>): Dp {
+        val headerWidth = textMeasurer.measure(column.title + SORT_MARK_ASCENDING, style.textStyle(), softWrap = false).size.width
+        // 太字の行もあるので、太字で測る。
+        val cellStyle = style.textStyle(style.listFontSize, bold = true)
+        val cellWidth = rows.asSequence()
+            .map { cellText(it, column.id) }
+            .distinct()
+            .sortedByDescending { it.length }
+            .take(FIT_SAMPLE_ROWS)
+            .maxOfOrNull { textMeasurer.measure(it, cellStyle, softWrap = false, maxLines = 1).size.width }
+            ?: 0
+        return with(density) { maxOf(headerWidth, cellWidth).toDp() + CELL_PADDING * 2 + 1.dp }.coerceAtLeast(MIN_COLUMN_WIDTH)
+    }
 
     // 配置される前の一覧はスクロールできないので、配置が済むのを待ってから移す。
     LaunchedEffect(scrollResetKey) {
@@ -198,7 +231,10 @@ fun <C, R> DataTable(
                         val position = event.changes.first().position
                         // 行の高さは一定なので、見出しより下で押した位置とスクロールの量から行を求める。
                         val belowHeader = position.y - headerHeightPx
-                        if (belowHeader < 0) continue
+                        if (belowHeader < 0) {
+                            currentOnHeaderContextMenu(position.round())
+                            continue
+                        }
                         val scrolled = listState.firstVisibleItemIndex * rowHeightPx + listState.firstVisibleItemScrollOffset
                         val index = ((belowHeader + scrolled) / rowHeightPx).toInt()
                         if (index < currentRowCount) currentOnContextMenu(index, position.round())
@@ -209,7 +245,16 @@ fun <C, R> DataTable(
         val contentWidth = maxOf(columns.fold(0.dp) { total, column -> total + column.width }, maxWidth - SCROLLBAR_WIDTH)
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxHeight().horizontalScroll(rememberScrollState())) {
-                HeaderRow(columns, sortedColumn, sortDescending, onColumnClick, onColumnResize, Modifier.width(contentWidth))
+                HeaderRow(
+                    columns = columns,
+                    sortedColumn = sortedColumn,
+                    sortDescending = sortDescending,
+                    onColumnClick = onColumnClick,
+                    onColumnResize = onColumnResize,
+                    onColumnFit = { column -> onColumnResize(column.id, fittingWidth(column)) },
+                    onColumnMove = onColumnMove,
+                    modifier = Modifier.width(contentWidth),
+                )
                 LazyColumn(state = listState, modifier = Modifier.width(contentWidth).weight(1f)) {
                     items(count = rows.size, key = { rowKey(rows[it]) }) { index ->
                         val highlighted = index == selectedIndex || isMarked(rows[index])
@@ -266,6 +311,13 @@ fun TableText(text: String, bold: Boolean = false) {
     )
 }
 
+/** 列見出しをドラッグしている最中の、動かしている列と、動かした量（ピクセル）。 */
+private data class ColumnDrag<C>(val column: C, val offsetPx: Float)
+
+/**
+ * 列見出しの行。見出しのクリックで並べ替え、右端のドラッグで幅を変え、右端のダブルクリックで幅を中身に合わせる。
+ * 見出しをドラッグすると、列を左右へ移せる。
+ */
 @Composable
 private fun <C> HeaderRow(
     columns: List<TableColumn<C>>,
@@ -273,16 +325,29 @@ private fun <C> HeaderRow(
     sortDescending: Boolean,
     onColumnClick: (C) -> Unit,
     onColumnResize: (C, Dp) -> Unit,
+    onColumnFit: (TableColumn<C>) -> Unit,
+    onColumnMove: (C, C?) -> Unit,
     modifier: Modifier,
 ) {
     val style = LocalLegirssStyle.current
+    val density = LocalDensity.current
     val borderColor = style.colors.border
+    val dropColor = style.colors.iconUnread
+    var drag by remember { mutableStateOf<ColumnDrag<C>?>(null) }
+    val currentColumns by rememberUpdatedState(columns)
+    val currentOnColumnMove by rememberUpdatedState(onColumnMove)
     Row(
         modifier
             .height(style.headerHeight)
             .background(style.colors.panel)
             .drawBehind {
                 drawLine(borderColor, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f))
+            }
+            .drawWithContent {
+                drawContent()
+                val current = drag ?: return@drawWithContent
+                val lineX = dropTarget(columns, current, density).lineX
+                drawLine(dropColor, Offset(lineX, 0f), Offset(lineX, size.height), DROP_LINE_WIDTH)
             },
     ) {
         columns.forEach { column ->
@@ -291,11 +356,27 @@ private fun <C> HeaderRow(
                 sortDescending -> SORT_MARK_DESCENDING
                 else -> SORT_MARK_ASCENDING
             }
+            val dragging = drag?.column == column.id
             Box(
                 Modifier
                     .width(column.width)
                     .fillMaxHeight()
+                    .zIndex(if (dragging) 1f else 0f)
+                    .graphicsLayer { translationX = if (dragging) drag?.offsetPx ?: 0f else 0f }
+                    .background(if (dragging) style.colors.hover else Color.Transparent)
                     .drawBehind { drawLine(borderColor, Offset(size.width - 1f, 2f), Offset(size.width - 1f, size.height - 3f)) }
+                    .dragInRoot(
+                        orientation = Orientation.Horizontal,
+                        onStart = { drag = ColumnDrag(column.id, 0f) },
+                        onDrag = { distance -> drag = ColumnDrag(column.id, distance) },
+                        onEnd = { completed ->
+                            val current = drag
+                            drag = null
+                            if (completed && current != null) {
+                                currentOnColumnMove(current.column, dropTarget(currentColumns, current, density).before)
+                            }
+                        },
+                    )
                     .clickable(remember { MutableInteractionSource() }, indication = null) { onColumnClick(column.id) },
             ) {
                 BasicText(
@@ -308,7 +389,9 @@ private fun <C> HeaderRow(
                 )
                 if (column.resizable) {
                     ResizeHandle(
-                        onDrag = { delta -> onColumnResize(column.id, (column.width + delta).coerceAtLeast(MIN_COLUMN_WIDTH)) },
+                        width = column.width,
+                        onResize = { width -> onColumnResize(column.id, width.coerceAtLeast(MIN_COLUMN_WIDTH)) },
+                        onDoubleClick = { onColumnFit(column) },
                         modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
@@ -317,18 +400,49 @@ private fun <C> HeaderRow(
     }
 }
 
+/**
+ * 列を落とす先。
+ *
+ * @param before この列の左へ移す。右端へ移すなら null。
+ * @param lineX 落とす位置を示す線の、行の左端からの距離（ピクセル）。
+ */
+private data class DropTarget<C>(val before: C?, val lineX: Float)
+
+/** 動かしている列の中心が、どの列の中心より左にあるかで、落とす先を決める。 */
+private fun <C> dropTarget(columns: List<TableColumn<C>>, drag: ColumnDrag<C>, density: Density): DropTarget<C> {
+    val widths = with(density) { columns.map { it.width.toPx() } }
+    val starts = widths.runningFold(0f, Float::plus)
+    val draggedIndex = columns.indexOfFirst { it.id == drag.column }
+    val center = starts[draggedIndex] + drag.offsetPx + widths[draggedIndex] / 2f
+    val index = columns.indices.firstOrNull { it != draggedIndex && center < starts[it] + widths[it] / 2f }
+    return when (index) {
+        null -> DropTarget(before = null, lineX = starts.last() - DROP_LINE_WIDTH / 2f)
+        else -> DropTarget(before = columns[index].id, lineX = starts[index] + DROP_LINE_WIDTH / 2f)
+    }
+}
+
+/**
+ * 列の右端に置く、幅を変える取っ手。ドラッグで幅を変え、ダブルクリックで [onDoubleClick] を呼ぶ。
+ *
+ * @param width いまの列の幅。ドラッグを始めたときの幅に、マウスの移動量を足した幅を [onResize] に伝える。
+ */
 @Composable
-private fun ResizeHandle(onDrag: (Dp) -> Unit, modifier: Modifier) {
+private fun ResizeHandle(width: Dp, onResize: (Dp) -> Unit, onDoubleClick: () -> Unit, modifier: Modifier) {
     val density = LocalDensity.current
-    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentWidth by rememberUpdatedState(width)
+    val currentOnDoubleClick by rememberUpdatedState(onDoubleClick)
+    var startWidth by remember { mutableStateOf(width) }
     Box(
         modifier
             .width(RESIZE_HANDLE_WIDTH)
             .fillMaxHeight()
             .pointerHoverIcon(HorizontalResizePointerIcon)
-            .draggable(
-                state = rememberDraggableState { delta -> currentOnDrag(with(density) { delta.toDp() }) },
+            // 見出しのクリック（並べ替え）として扱わないよう、ここで受けたクリックは処理済みにする。
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { currentOnDoubleClick() }) }
+            .dragInRoot(
                 orientation = Orientation.Horizontal,
+                onStart = { startWidth = currentWidth },
+                onDrag = { distance -> onResize(startWidth + with(density) { distance.toDp() }) },
             ),
     )
 }

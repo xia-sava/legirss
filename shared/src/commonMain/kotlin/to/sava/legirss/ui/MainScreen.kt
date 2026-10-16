@@ -48,7 +48,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -164,13 +163,7 @@ private fun MainContent(
                     onFirstHeightChange = { onLayoutChange(layout.copy(listHeight = it)) },
                     modifier = Modifier.fillMaxSize(),
                     first = {
-                        ArticleTable(
-                            state = state,
-                            actions = actions,
-                            columnWidths = layout.columnWidths,
-                            onColumnResize = { column, width -> onLayoutChange(layout.withColumnWidth(column, width)) },
-                            panes = panes,
-                        )
+                        ArticleTable(state, actions, layout, onLayoutChange, panes)
                     },
                     second = { ArticlePane(state, actions, articleScroll, panes) },
                 )
@@ -275,8 +268,8 @@ private fun treeMenuEntries(row: TreeRow<NodeSelection>, actions: MainActions): 
 private fun ArticleTable(
     state: MainUiState,
     actions: MainActions,
-    columnWidths: Map<ArticleColumn, Dp>,
-    onColumnResize: (ArticleColumn, Dp) -> Unit,
+    layout: ScreenLayout,
+    onLayoutChange: (ScreenLayout) -> Unit,
     panes: PaneFocus,
 ) {
     val focusRequester = panes.requesterOf(Pane.LIST)
@@ -285,27 +278,39 @@ private fun ArticleTable(
     // 一覧が画面に組み込まれた後に実行されるよう、一覧と同じ場所で行う。
     LaunchedEffect(state.listFocusRequest) { focusRequester.requestFocus() }
 
-    // 右クリックのメニューを出す位置。出していなければ null。
+    // 行と列見出しの右クリックのメニューを出す位置。出していなければ null。
     var menuPosition by remember { mutableStateOf<IntOffset?>(null) }
+    var headerMenuPosition by remember { mutableStateOf<IntOffset?>(null) }
     Box(Modifier.fillMaxSize()) {
         ArticleDataTable(
             state = state,
             actions = actions,
-            columnWidths = columnWidths,
-            onColumnResize = onColumnResize,
+            layout = layout,
+            onLayoutChange = onLayoutChange,
             onContextMenu = { index, position ->
                 // 操作の対象になっていない行で開いたら、その行を選んでから出す。
                 if (state.articles.getOrNull(index) !in state.targetArticles) actions.selectArticle(index)
                 menuPosition = position
             },
+            onHeaderContextMenu = { headerMenuPosition = it },
             modifier = Modifier.fillMaxSize().then(panes.track(Pane.LIST)),
             focusRequester = focusRequester,
         )
         menuPosition?.let { position ->
             PopupMenu(articleMenuEntries(actions), position, onDismiss = { menuPosition = null })
         }
+        headerMenuPosition?.let { position ->
+            PopupMenu(columnMenuEntries(layout, onLayoutChange), position, onDismiss = { headerMenuPosition = null })
+        }
     }
 }
+
+/** 隠せる列を並べ、出している列に印を付けたメニュー。選ぶと出すか隠すかが入れ替わる。 */
+private fun columnMenuEntries(layout: ScreenLayout, onLayoutChange: (ScreenLayout) -> Unit): List<MenuEntry?> =
+    layout.columnOrder.filter { it.hideable }.map { column ->
+        val visible = column !in layout.hiddenColumns
+        MenuEntry(column.title, checked = visible) { onLayoutChange(layout.withColumnVisible(column, !visible)) }
+    }
 
 private fun articleMenuEntries(actions: MainActions): List<MenuEntry?> = listOf(
     MenuEntry(OPEN_IN_BROWSER_LABEL, onClick = actions::openSelectedArticle),
@@ -324,19 +329,20 @@ private fun articleMenuEntries(actions: MainActions): List<MenuEntry?> = listOf(
 private fun ArticleDataTable(
     state: MainUiState,
     actions: MainActions,
-    columnWidths: Map<ArticleColumn, Dp>,
-    onColumnResize: (ArticleColumn, Dp) -> Unit,
+    layout: ScreenLayout,
+    onLayoutChange: (ScreenLayout) -> Unit,
     onContextMenu: (Int, IntOffset) -> Unit,
+    onHeaderContextMenu: (IntOffset) -> Unit,
     modifier: Modifier,
     focusRequester: FocusRequester,
 ) {
     val colors = LocalLegirssStyle.current.colors
     DataTable(
-        columns = ArticleColumn.entries.map { column ->
+        columns = layout.visibleColumns.map { column ->
             TableColumn(
                 id = column,
                 title = column.title,
-                width = columnWidths.getValue(column),
+                width = layout.columnWidths.getValue(column),
                 resizable = column != ArticleColumn.STATE,
             )
         },
@@ -354,28 +360,36 @@ private fun ArticleDataTable(
         },
         onSelectAll = actions::markAllArticles,
         onContextMenu = onContextMenu,
+        onHeaderContextMenu = onHeaderContextMenu,
         scrollResetKey = state.listArrangement,
         // 並べ直したら、読み始める記事（一番古い未読）が見える位置へ移す。未読が無ければ先頭へ戻す。
         scrollResetIndex = state.lastUnreadIndex ?: 0,
         sortedColumn = state.sort.column,
         sortDescending = state.sort.descending,
         onColumnClick = actions::sortBy,
-        onColumnResize = onColumnResize,
+        onColumnResize = { column, width -> onLayoutChange(layout.withColumnWidth(column, width)) },
+        onColumnMove = { column, before -> onLayoutChange(layout.withColumnMoved(column, before)) },
+        cellText = { article, column -> cellTextOf(article, column, state.channelNames) },
         centerSelection = state.settings.centerSelection,
         modifier = modifier,
         focusRequester = focusRequester,
     ) { article, column ->
-        val unread = article.state == ArticleState.UNREAD
         when (column) {
             ArticleColumn.STATE -> Canvas(Modifier.size(STATE_ICON_SIZE)) { drawStateIcon(article.state, colors) }
-            ArticleColumn.DATE -> TableText(formatListDateTime(article.sortAt), unread)
-            ArticleColumn.FETCHED -> TableText(formatListDateTime(article.fetchedAt), unread)
-            ArticleColumn.TITLE -> TableText(article.title, unread)
-            ArticleColumn.CHANNEL -> TableText(state.channelNames[article.channelId].orEmpty(), unread)
-            ArticleColumn.CATEGORY -> TableText(article.category.orEmpty(), unread)
-            ArticleColumn.AUTHOR -> TableText(article.author.orEmpty(), unread)
+            else -> TableText(cellTextOf(article, column, state.channelNames), bold = article.state == ArticleState.UNREAD)
         }
     }
+}
+
+/** 一覧のセルに出す文字。状態の列は印を描くので、文字は無い。 */
+private fun cellTextOf(article: ArticleRow, column: ArticleColumn, channelNames: Map<Long, String>): String = when (column) {
+    ArticleColumn.STATE -> ""
+    ArticleColumn.DATE -> formatListDateTime(article.sortAt)
+    ArticleColumn.FETCHED -> formatListDateTime(article.fetchedAt)
+    ArticleColumn.TITLE -> article.title
+    ArticleColumn.CHANNEL -> channelNames[article.channelId].orEmpty()
+    ArticleColumn.CATEGORY -> article.category.orEmpty()
+    ArticleColumn.AUTHOR -> article.author.orEmpty()
 }
 
 /** 未読は塗った丸、既読は輪郭だけの丸で表す。 */

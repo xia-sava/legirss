@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,16 +36,23 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import to.sava.legirss.ui.theme.LocalLegirssStyle
 
-/** メニューの 1 項目。 */
+/**
+ * メニューの 1 項目。
+ *
+ * @param checked 付け外しする項目なら、いま付いているか。付け外しする項目でなければ null。
+ */
 @Immutable
 data class MenuEntry(
     val label: String,
     val enabled: Boolean = true,
+    val checked: Boolean? = null,
     val onClick: () -> Unit,
 )
 
 private val MENU_ROW_HEIGHT = 22.dp
 private val MENU_SIDE_PADDING = 12.dp
+private val CHECK_MARK_WIDTH = 16.dp
+private const val CHECK_MARK = "✓"
 private val MENU_VERTICAL_PADDING = 2.dp
 private val SEPARATOR_VERTICAL_PADDING = 3.dp
 private val BORDER_WIDTH = 1.dp
@@ -104,11 +112,13 @@ private fun MenuRow(entry: MenuEntry, onClick: () -> Unit) {
             .padding(horizontal = MENU_SIDE_PADDING),
         contentAlignment = Alignment.CenterStart,
     ) {
-        BasicText(
-            text = entry.label,
-            style = style.textStyle(color = if (entry.enabled) style.colors.text else style.colors.textDim),
-            maxLines = 1,
-        )
+        val textStyle = style.textStyle(color = if (entry.enabled) style.colors.text else style.colors.textDim)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            entry.checked?.let { checked ->
+                BasicText(if (checked) CHECK_MARK else "", style = textStyle, modifier = Modifier.width(CHECK_MARK_WIDTH))
+            }
+            BasicText(text = entry.label, style = textStyle, maxLines = 1)
+        }
     }
 }
 
