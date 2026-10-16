@@ -163,6 +163,7 @@ class LegirssStore(
                         category = item.category,
                         published_at = item.publishedAt,
                         sort_at = item.publishedAt ?: (now - index),
+                        fetched_at = now,
                         state = state.code,
                     )
                 }
@@ -340,6 +341,7 @@ class LegirssStore(
                 category = article.category,
                 published_at = article.publishedAt,
                 sort_at = article.sortAt,
+                fetched_at = article.fetchedAt,
                 state = article.state.code,
             )
         }
@@ -354,8 +356,9 @@ class LegirssStore(
         category: String?,
         publishedAt: Long?,
         sortAt: Long,
+        fetchedAt: Long,
         state: Long,
-    ): ArticleRow = ArticleRow(id, channelId, title, link, author, category, publishedAt, sortAt, ArticleState.fromCode(state))
+    ): ArticleRow = ArticleRow(id, channelId, title, link, author, category, publishedAt, sortAt, fetchedAt, ArticleState.fromCode(state))
 
     private companion object {
         const val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L

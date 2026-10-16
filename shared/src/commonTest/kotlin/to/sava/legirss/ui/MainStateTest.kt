@@ -27,7 +27,14 @@ class MainStateTest {
         channel = ChannelInfo("https://example.com/$id", siteUrl = null, title = null, paused = paused, hasError = false),
     )
 
-    private fun article(id: Long, channelId: Long, state: ArticleState, sortAt: Long, title: String = "t$id") = ArticleRow(
+    private fun article(
+        id: Long,
+        channelId: Long,
+        state: ArticleState,
+        sortAt: Long,
+        title: String = "t$id",
+        fetchedAt: Long = sortAt,
+    ) = ArticleRow(
         id = id,
         channelId = channelId,
         title = title,
@@ -36,6 +43,7 @@ class MainStateTest {
         category = null,
         publishedAt = null,
         sortAt = sortAt,
+        fetchedAt = fetchedAt,
         state = state,
     )
 
@@ -160,6 +168,21 @@ class MainStateTest {
 
         assertEquals(listOf("a", "b", "c", "d"), byTitle.map { it.title })
         assertEquals(listOf(3L, 1L, 4L, 2L), byDateDescending.map { it.id })
+    }
+
+    /** 取得日で並べると、記事の日時ではなく取得した時刻の順になる。同じ時刻に取得した記事は、記事の日時の新しい順になる。 */
+    @Test
+    fun sortsByFetchedTime() {
+        val fetched = listOf(
+            article(1, channelId = 2, state = ArticleState.UNREAD, sortAt = 9_000, fetchedAt = 100),
+            article(2, channelId = 2, state = ArticleState.UNREAD, sortAt = 50, fetchedAt = 300),
+            article(3, channelId = 2, state = ArticleState.UNREAD, sortAt = 80, fetchedAt = 300),
+            article(4, channelId = 2, state = ArticleState.UNREAD, sortAt = 70, fetchedAt = 200),
+        )
+
+        val arranged = arrangeArticles(fetched, StateFilter.ALL, ArticleSort(ArticleColumn.FETCHED, descending = true), tree.channelNames)
+
+        assertEquals(listOf(3L, 2L, 4L, 1L), arranged.map { it.id })
     }
 
     /** 購読状況で絞り込むと、その状況の記事だけが残る。 */

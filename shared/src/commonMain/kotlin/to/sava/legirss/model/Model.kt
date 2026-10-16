@@ -48,6 +48,8 @@ data class ArticleRow(
     val category: String?,
     val publishedAt: Long?,
     val sortAt: Long,
+    /** 記事を登録した時刻。 */
+    val fetchedAt: Long,
     val state: ArticleState,
 )
 

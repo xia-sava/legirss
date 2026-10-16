@@ -61,6 +61,7 @@ class MainViewModelTest {
         category = null,
         publishedAt = null,
         sortAt = sortAt,
+        fetchedAt = sortAt,
         state = state,
     )
 

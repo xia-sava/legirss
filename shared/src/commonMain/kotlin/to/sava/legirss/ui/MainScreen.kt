@@ -409,6 +409,7 @@ private fun ArticleDataTable(
         when (column) {
             ArticleColumn.STATE -> Canvas(Modifier.size(STATE_ICON_SIZE)) { drawStateIcon(article.state, colors) }
             ArticleColumn.DATE -> TableText(formatListDateTime(article.sortAt), unread)
+            ArticleColumn.FETCHED -> TableText(formatListDateTime(article.fetchedAt), unread)
             ArticleColumn.TITLE -> TableText(article.title, unread)
             ArticleColumn.CHANNEL -> TableText(state.channelNames[article.channelId].orEmpty(), unread)
             ArticleColumn.CATEGORY -> TableText(article.category.orEmpty(), unread)

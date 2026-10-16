@@ -37,6 +37,7 @@ enum class StateFilter(val label: String) {
 enum class ArticleColumn(val title: String) {
     STATE(""),
     DATE("更新日"),
+    FETCHED("取得日"),
     TITLE("タイトル"),
     CHANNEL("チャンネル"),
     CATEGORY("カテゴリ"),
@@ -324,6 +325,7 @@ fun arrangeArticles(
     val primary: Comparator<ArticleRow> = when (sort.column) {
         ArticleColumn.STATE -> compareBy { if (it.state == ArticleState.UNREAD) 0 else 1 }
         ArticleColumn.DATE -> compareBy { it.sortAt }
+        ArticleColumn.FETCHED -> compareBy { it.fetchedAt }
         ArticleColumn.TITLE -> compareBy { it.title }
         ArticleColumn.CHANNEL -> compareBy { channelNames[it.channelId].orEmpty() }
         ArticleColumn.CATEGORY -> compareBy { it.category.orEmpty() }

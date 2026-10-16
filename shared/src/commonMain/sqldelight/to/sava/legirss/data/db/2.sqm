@@ -1,0 +1,3 @@
+-- 記事を取得した時刻を足す。既にある記事は記録が無いため、並べ替えに使う日時を、移行した時刻より先に行かないようにして入れる。
+ALTER TABLE article ADD COLUMN fetched_at INTEGER NOT NULL DEFAULT 0;
+UPDATE article SET fetched_at = min(sort_at, CAST(strftime('%s', 'now') AS INTEGER) * 1000);

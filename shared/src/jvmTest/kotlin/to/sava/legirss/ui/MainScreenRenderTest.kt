@@ -84,6 +84,7 @@ class MainScreenRenderTest {
             category = "category",
             publishedAt = id * 3_600_000,
             sortAt = id * 3_600_000,
+            fetchedAt = id * 3_600_000,
             state = if (id > 30) ArticleState.UNREAD else ArticleState.READ,
         )
     }

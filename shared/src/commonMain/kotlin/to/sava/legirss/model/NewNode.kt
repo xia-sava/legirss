@@ -31,5 +31,6 @@ data class NewArticle(
     val category: String?,
     val publishedAt: Long?,
     val sortAt: Long,
+    val fetchedAt: Long,
     val state: ArticleState,
 )

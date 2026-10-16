@@ -25,7 +25,8 @@ data class ScreenLayout(
         private val DEFAULT_LIST_HEIGHT = 260.dp
         private val DEFAULT_COLUMN_WIDTHS = mapOf(
             ArticleColumn.STATE to 22.dp,
-            ArticleColumn.DATE to 84.dp,
+            ArticleColumn.DATE to 112.dp,
+            ArticleColumn.FETCHED to 112.dp,
             ArticleColumn.TITLE to 460.dp,
             ArticleColumn.CHANNEL to 160.dp,
             ArticleColumn.CATEGORY to 110.dp,

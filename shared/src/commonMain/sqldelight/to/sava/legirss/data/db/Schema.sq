@@ -27,7 +27,7 @@ CREATE TABLE channel (
     gone_at INTEGER
 );
 
--- 記事。state は 0=未読 1=既読。時刻は UTC のエポックミリ秒。
+-- 記事。state は 0=未読 1=既読。時刻は UTC のエポックミリ秒。fetched_at は記事を登録した時刻。
 CREATE TABLE article (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     channel_id INTEGER NOT NULL REFERENCES channel(node_id) ON DELETE CASCADE,
@@ -41,6 +41,7 @@ CREATE TABLE article (
     published_at INTEGER,
     sort_at INTEGER NOT NULL,
     state INTEGER NOT NULL DEFAULT 0,
+    fetched_at INTEGER NOT NULL DEFAULT 0,
     UNIQUE (channel_id, identity)
 );
 
@@ -107,15 +108,15 @@ SELECT last_insert_rowid();
 
 insertArticle:
 INSERT OR IGNORE INTO article
-    (channel_id, identity, title, link, summary, content, author, category, published_at, sort_at, state)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    (channel_id, identity, title, link, summary, content, author, category, published_at, sort_at, fetched_at, state)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectArticleRows:
-SELECT id, channel_id, title, link, author, category, published_at, sort_at, state
+SELECT id, channel_id, title, link, author, category, published_at, sort_at, fetched_at, state
 FROM article;
 
 selectArticleRowsByChannels:
-SELECT id, channel_id, title, link, author, category, published_at, sort_at, state
+SELECT id, channel_id, title, link, author, category, published_at, sort_at, fetched_at, state
 FROM article
 WHERE channel_id IN ?;
 

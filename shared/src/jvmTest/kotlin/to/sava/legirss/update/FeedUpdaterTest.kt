@@ -91,6 +91,19 @@ class FeedUpdaterTest {
         assertEquals(listOf(clock, clock - 1), articles().map { it.sortAt })
     }
 
+    /** 記事を登録した時刻を、取得日として持つ。登録済みの記事の取得日は、次の取得で変えない。 */
+    @Test
+    fun recordsFetchedTimeOfNewArticles() = runTest {
+        registerChannel()
+        val firstFetch = clock
+        updater { respond(rss("a" to "First")) }.update(channelIds = null)
+        clock += 60_000
+
+        updater { respond(rss("b" to "Second", "a" to "First")) }.update(channelIds = null)
+
+        assertEquals(listOf(firstFetch, clock), articles().map { it.fetchedAt })
+    }
+
     /** 登録済みの記事は増やさず、内容だけを新しくする。閲覧状況は変えない。 */
     @Test
     fun updatesContentOfKnownArticlesWithoutChangingState() = runTest {

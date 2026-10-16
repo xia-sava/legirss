@@ -26,7 +26,7 @@ actual fun ContentScrollbar(state: ScrollState, modifier: Modifier) {
     VerticalScrollbar(rememberScrollbarAdapter(state), modifier)
 }
 
-private val listDateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd HH:mm")
+private val listDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm")
 
 actual fun formatListDateTime(epochMillis: Long): String =
     Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(listDateTimeFormatter)
