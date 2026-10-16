@@ -34,8 +34,9 @@ private const val ADD_CHANNEL = "チャンネルの追加(A)…"
 private const val ADD_GROUP = "グループの追加(G)…"
 
 private const val ARTICLE_MENU = "記事(A)"
-private const val READ_NEXT = "次を読む(N)"
+private const val READ_NEXT = "読み進める(N)"
 private const val PAGE_BACK = "本文を前へ戻す(P)"
+private const val SELECT_ABOVE = "1 つ上の記事へ(K)"
 private const val OPEN_IN_BROWSER = "ブラウザで開く(O)"
 private const val TOGGLE_STATE = "既読と未読を切り替える(T)"
 private const val MARK_UNREAD = "未読にする(U)"
@@ -60,6 +61,7 @@ private val UPDATE_SELECTED_KEY = KeyShortcut(Key.F2, alt = true)
 private val ADD_CHANNEL_KEY = KeyShortcut(Key.F3)
 private val READ_NEXT_KEY = KeyShortcut(Key.Spacebar)
 private val PAGE_BACK_KEY = KeyShortcut(Key.Spacebar, shift = true)
+private val SELECT_ABOVE_KEY =KeyShortcut(Key.Spacebar, ctrl = true)
 private val OPEN_IN_BROWSER_KEY = KeyShortcut(Key.Enter)
 private val TOGGLE_STATE_KEY = KeyShortcut(Key.DirectionRight)
 private val COPY_URL_KEY = KeyShortcut(Key.L, ctrl = true)
@@ -143,6 +145,7 @@ private fun MenuScope.ArticleCommands(state: MainUiState, actions: MainActions, 
     val scope = rememberCoroutineScope()
     Command(READ_NEXT, enabled, READ_NEXT_KEY) { actions.readNextPage(state.selectedArticle != null, articleScroll, scope) }
     Command(PAGE_BACK, enabled, PAGE_BACK_KEY) { pageBack(articleScroll, scope) }
+    Command(SELECT_ABOVE, enabled, SELECT_ABOVE_KEY, actions::selectAbove)
     Command(OPEN_IN_BROWSER, enabled, OPEN_IN_BROWSER_KEY, actions::openSelectedArticle)
     Separator()
     Command(TOGGLE_STATE, enabled, TOGGLE_STATE_KEY, actions::toggleSelectedState)

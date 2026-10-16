@@ -195,6 +195,38 @@ class MainViewModelTest {
         assertEquals(2, afterAllRead)
     }
 
+    /** 1 つ上の記事へ移ると 1 つ上の行を選び、一覧の表示を移すよう求める。先頭からは動かない。 */
+    @Test
+    fun selectsArticleAbove() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+        viewModel.selectArticle(2)
+
+        viewModel.selectAbove()
+        val afterFirst = viewModel.state.value.selectedArticleIndex
+        viewModel.selectAbove()
+        viewModel.selectAbove()
+
+        assertEquals(1, afterFirst)
+        assertEquals(0, viewModel.state.value.selectedArticleIndex)
+        assertEquals(3, viewModel.state.value.selectionRevealRequest)
+    }
+
+    /** 何も選んでいないときに 1 つ上の記事へ移ると、一番下の未読を選ぶ。未読が無ければ一番下の記事を選ぶ。 */
+    @Test
+    fun selectsLastUnreadWhenNothingSelected() = runTest(UnconfinedTestDispatcher()) {
+        val viewModel = loadedViewModel()
+
+        viewModel.selectAbove()
+        val withUnread = viewModel.state.value.selectedArticle?.title
+        viewModel.setSelectedState(ArticleState.READ)
+        viewModel.selectArticle(0)
+        viewModel.reloadList()
+        viewModel.selectAbove()
+
+        assertEquals("older", withUnread)
+        assertEquals(2, viewModel.state.value.selectedArticleIndex)
+    }
+
     /** 選んでいる行より下に未読が残っていれば、読み進めたときにそちらへ移る。 */
     @Test
     fun readsOnToUnreadBelowSelection() = runTest(UnconfinedTestDispatcher()) {

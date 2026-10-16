@@ -206,6 +206,27 @@ class MainViewModel(
      */
     override fun readOn() {
         val index = mutableState.value.lastUnreadIndex ?: return
+        selectAndReveal(index)
+    }
+
+    /**
+     * 一覧で 1 つ上の記事を選ぶ。一覧の ↑ と同じく、範囲で印を付けていればその終わりの行から数える。
+     *
+     * 何も選んでいなければ、読み進めるときと同じく一番下の未読を選ぶ。未読が無ければ一番下の記事を選ぶ。
+     */
+    override fun selectAbove() {
+        val current = mutableState.value
+        if (current.articles.isEmpty()) return
+        val cursor = current.markRangeEndIndex ?: current.selectedArticleIndex
+        val index = when (cursor) {
+            null -> current.lastUnreadIndex ?: current.articles.lastIndex
+            else -> (cursor - 1).coerceAtLeast(0)
+        }
+        selectAndReveal(index)
+    }
+
+    /** 記事を選んで表示し、一覧の表示を選んだ記事へ移すよう求める。 */
+    private fun selectAndReveal(index: Int) {
         selectArticle(index)
         mutableState.update { it.copy(selectionRevealRequest = it.selectionRevealRequest + 1) }
     }

@@ -37,6 +37,8 @@ interface MainActions {
 
     fun readOn()
 
+    fun selectAbove()
+
     fun toggleSelectedState()
 
     fun setSelectedState(state: ArticleState)
