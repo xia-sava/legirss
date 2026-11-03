@@ -24,6 +24,7 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 | `shared` `ui/component/` | 自作の部品。`TreeView` `DataTable` `SplitLayout` `PopupMenu` `ModalDialog` `HtmlContent` |
 | `desktopApp` | `Main.kt`（組み立て）、`TrayController`、`SingleInstance`、`StartupRegistration`、`BrowserLauncher`、`AppLog` |
 | `desktopApp` `update/` | アプリの自己更新。マニフェストの署名の確認、配布物の取得と照合、入れ替えのスクリプト |
+| `desktopApp` `gpu/` | GPU のリセット（TDR）からの描画の立て直し。D3D11 の見張りのデバイスと、Skiko に描画のデバイスを作り直させる処理 |
 
 `update` という名前のパッケージが 2 つある。`shared` のものはフィードの更新、`desktopApp` のものは
 アプリ自身の更新で、別の機能。
@@ -109,6 +110,15 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
   マウスの半分ほどしか動かなくなる。`dragInRoot` で、押した位置からの量を画面全体の座標で測り、
   始めたときの大きさに足す
 - **GUI のアプリでは標準エラーが誰にも見えない。** 失敗は `AppLog` で記録する
+- **GPU がリセット（TDR）されると、Skiko は例外を出さずに描くのをやめる。** ウィンドウは応答したまま中身が
+  真っ白になる。`gpu/` の見張りがこれを見つけて、Skiko に描画のデバイスを作り直させる。
+  リセットは、管理者の PowerShell で `dxcap -forcetdr` を実行すると起こせる（Windows のオプション機能
+  「グラフィックスツール」が要る。画面全体が 2 秒ほど点滅する）
+- **失われた見張りのデバイスは、新しい見張りのデバイスを作ってから解放する。** ほかに生きている D3D11 の
+  デバイスが無いときに解放すると、プロセスごと落ちる（`EXCEPTION_ACCESS_VIOLATION`）。順序は
+  `GpuResetRecoveryTest` で固定している
+- **Skiko を上げたら `SkikoRendererResetTest` を見る。** 作り直す入口はリフレクションで呼んでいる。名前や形が
+  変わると、配布物では黙って GPU を使わない描画（`skiko.renderApi=SOFTWARE`）に切り替わり、このテストだけが落ちる
 - **ウィンドウを出さない描画では、実機との差が残る。** 利用者の画面は高解像度で、文字の上下の位置の
   ような細かい差は等倍の描画に出ない。見た目の細部は、最後に利用者の画面で確かめてもらう
 

@@ -31,8 +31,13 @@ internal object AppLog {
         }
     }
 
+    /** あとから経緯を追えるよう、起きたことを記録する。 */
+    fun info(message: String) {
+        logger.log(Level.INFO, message)
+    }
+
     /** 動作は続けられる失敗を記録する。 */
-    fun warn(message: String, cause: Throwable) {
+    fun warn(message: String, cause: Throwable? = null) {
         logger.log(Level.WARNING, message, cause)
     }
 

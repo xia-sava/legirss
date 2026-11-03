@@ -38,6 +38,7 @@ import to.sava.legirss.data.DatabaseFactory
 import to.sava.legirss.data.LegirssStore
 import to.sava.legirss.feed.FeedHttp
 import to.sava.legirss.feed.FeedLocator
+import to.sava.legirss.gpu.installGpuResetRecovery
 import to.sava.legirss.model.AppSettings
 import to.sava.legirss.ui.MainScreen
 import to.sava.legirss.ui.MainUiState
@@ -93,6 +94,8 @@ fun main(args: Array<String>) {
 
     AppLog.writeTo(dataDir)
     Thread.setDefaultUncaughtExceptionHandler { _, exception -> AppLog.error("処理されなかった例外", exception) }
+    // 描画 API を決めるため、ウィンドウを作るより前に呼ぶ。
+    installGpuResetRecovery()
 
     val store = LegirssStore(DatabaseFactory.open(dataDir), Dispatchers.IO)
     val fetcher = FeedHttp.createFetcher()

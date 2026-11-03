@@ -15,6 +15,7 @@ dependencies {
     implementation(projects.shared)
 
     implementation(compose.desktop.currentOs)
+    implementation(libs.jna.platform)
     implementation(libs.kotlinx.coroutinesSwing)
     implementation(libs.kotlinx.serialization.json)
 

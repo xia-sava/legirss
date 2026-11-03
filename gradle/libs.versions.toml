@@ -1,6 +1,7 @@
 [versions]
 coil = "3.6.3"
 composeMultiplatform = "1.12.0"
+jna = "5.19.1"
 kotlin = "2.4.20"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.9.0"
@@ -15,7 +16,8 @@ compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", v
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
 compose-uiTest = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "composeMultiplatform" }
-kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jna" }
+kotlin-test ={ module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutinesSwing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
