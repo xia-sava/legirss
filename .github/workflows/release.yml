@@ -75,9 +75,9 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
 
       # リポジトリに置いている gradle-wrapper.jar が公式のものであることを確かめる。
-      - uses: gradle/actions/wrapper-validation@v5
+      - uses: gradle/actions/wrapper-validation@v6
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run tests
         run: ./gradlew check --console=plain
