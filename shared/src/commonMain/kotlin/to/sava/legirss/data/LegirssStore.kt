@@ -69,7 +69,7 @@ class LegirssStore(
     /** チャンネルのノード ID ごとの記事数。記事の無いチャンネルは含まれない。 */
     suspend fun loadArticleCounts(): Map<Long, ArticleCount> = access {
         queries.selectArticleCounts { channelId, total, unread ->
-            channelId to ArticleCount(total = total.toInt(), unread = unread?.toInt() ?: 0)
+            channelId to ArticleCount(total = total.toInt(), unread = unread.toInt())
         }.executeAsList().toMap()
     }
 
