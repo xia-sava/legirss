@@ -13,6 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Gradle のデーモン、コンパイルとテスト、配布物に使う JetBrains Runtime のバージョン。
+  # gradle/gradle-daemon-jvm.properties の toolchainVersion に揃える。
   JAVA_VERSION: "25"
   # マニフェスト（latest.json）の署名を確かめる公開鍵（X.509 SubjectPublicKeyInfo の DER を base64）。
   # アプリへ埋め込んである値と同じでなければならない。
@@ -69,9 +71,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # 配布物に入れる JetBrains Runtime。Gradle のツールチェーンが自動でダウンロードする先には
+      # 載っていないバージョンがあるため、ここで入れて場所を Gradle へ渡す。
       - uses: actions/setup-java@v6
+        id: jetbrains-runtime
         with:
-          distribution: temurin
+          distribution: jetbrains
           java-version: ${{ env.JAVA_VERSION }}
 
       # リポジトリに置いている gradle-wrapper.jar が公式のものであることを確かめる。
@@ -86,6 +91,7 @@ jobs:
         run: >
           ./gradlew :desktopApp:packageMsi
           "-Plegirss.version=${{ needs.version.outputs.name }}"
+          "-Porg.gradle.java.installations.paths=${{ steps.jetbrains-runtime.outputs.path }}"
           --console=plain
 
       - name: Collect MSI

@@ -68,7 +68,7 @@ Kotlin Multiplatform と Compose Multiplatform で書いている。動かせる
 
 ## ビルド
 
-JDK 25 が要る。
+JetBrains Runtime 25 が要る。Gradle のデーモンもこれで動かす。
 
 ```bash
 ./gradlew :desktopApp:run          # 開発用に起動する。データは desktopApp/build/dev-data に置く
