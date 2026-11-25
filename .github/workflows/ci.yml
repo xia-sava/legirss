@@ -16,7 +16,7 @@ concurrency:
 
 env:
   # Gradle のデーモンと、コンパイルとテストに使う JetBrains Runtime のバージョン。
-  # gradle/gradle-daemon-jvm.properties の toolchainVersion に揃え、
+  # gradle/gradle-daemon-jvm.properties の toolchainVersion と libs.versions.toml の jdk に揃え、
   # Gradle がダウンロードせずに見つけられるようにする。
   JAVA_VERSION: "25"
 

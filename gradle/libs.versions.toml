@@ -1,6 +1,9 @@
 [versions]
 coil = "3.6.3"
 composeMultiplatform = "1.12.2"
+# コンパイル、テスト、配布物に使う JetBrains Runtime のバージョン。
+# gradle/gradle-daemon-jvm.properties の toolchainVersion と、ワークフローの JAVA_VERSION に揃える。
+jdk = "25"
 jna = "5.19.1"
 kotlin = "2.4.21"
 kotlinx-coroutines = "1.11.0"

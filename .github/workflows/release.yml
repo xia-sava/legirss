@@ -14,7 +14,7 @@ concurrency:
 
 env:
   # Gradle のデーモン、コンパイルとテスト、配布物に使う JetBrains Runtime のバージョン。
-  # gradle/gradle-daemon-jvm.properties の toolchainVersion に揃える。
+  # gradle/gradle-daemon-jvm.properties の toolchainVersion と libs.versions.toml の jdk に揃える。
   JAVA_VERSION: "25"
   # マニフェスト（latest.json）の署名を確かめる公開鍵（X.509 SubjectPublicKeyInfo の DER を base64）。
   # アプリへ埋め込んである値と同じでなければならない。

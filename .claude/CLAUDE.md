@@ -109,6 +109,9 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 - **ドラッグに合わせて動く部品では、移動量を部品自身の座標で測らない。** 部品が動いた分だけ量が目減りし、
   マウスの半分ほどしか動かなくなる。`dragInRoot` で、押した位置からの量を画面全体の座標で測り、
   始めたときの大きさに足す
+- **配布物に同梱する実行環境は、`compose.desktop.application.javaHome` の JDK から作られる。** 指定しないと
+  Gradle のデーモンの JDK になり、`jvmToolchain` は効かない。`desktopApp/build.gradle.kts` で JetBrains Runtime の
+  場所を渡している
 - **GUI のアプリでは標準エラーが誰にも見えない。** 失敗は `AppLog` で記録する
 - **GPU がリセット（TDR）されると、Skiko は例外を出さずに描くのをやめる。** ウィンドウは応答したまま中身が
   真っ白になる。`gpu/` の見張りがこれを見つけて、Skiko に描画のデバイスを作り直させる。
@@ -155,6 +158,11 @@ Windows 用の RSS リーダー。Kotlin Multiplatform と Compose Multiplatform
 
 `vMAJOR.MINOR.PATCH` のタグを push したときだけ配布物が出る。main への push では出ない。
 手順と注意点は release skill を参照。
+
+配布物には JetBrains Runtime を同梱する。Gradle のデーモン、コンパイル、テスト、`run` も同じものを使う。
+版は `gradle/libs.versions.toml` の `jdk` が持ち、`gradle/gradle-daemon-jvm.properties` の `toolchainVersion` と
+ワークフローの `JAVA_VERSION` を揃える。デーモンの条件は
+`./gradlew updateDaemonJvm --jvm-version=版 --jvm-vendor=JETBRAINS` で作り直す。
 
 タスクトレイのメニューにある「Windows の起動時に開始する」と自己更新は、インストールしたアプリから
 起動したときだけ働く。開発用の起動では、どちらも無効になる。

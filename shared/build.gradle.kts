@@ -6,7 +6,11 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(25)
+    // コンパイルとテストには、アプリを動かすものと同じ JetBrains Runtime を使う。
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt()))
+        vendor.set(JvmVendorSpec.JETBRAINS)
+    }
 
     jvm()
 

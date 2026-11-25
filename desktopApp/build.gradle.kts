@@ -7,8 +7,15 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+/** コンパイル、テスト、`run`、配布物に使う JetBrains Runtime。 */
+val jetBrainsRuntimeSpec = Action<JavaToolchainSpec> {
+    languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt()))
+    vendor.set(JvmVendorSpec.JETBRAINS)
+}
+val jetBrainsRuntime = javaToolchains.launcherFor(jetBrainsRuntimeSpec)
+
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(jetBrainsRuntimeSpec)
 }
 
 dependencies {
@@ -51,6 +58,8 @@ tasks.named<ProcessResources>("processResources") {
 compose.desktop {
     application {
         mainClass = "to.sava.legirss.MainKt"
+        // `run` で動かす JDK で、配布物に同梱する実行環境もここから作る。指定しないと Gradle のデーモンの JDK になる。
+        javaHome = jetBrainsRuntime.get().metadata.installationPath.asFile.path
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi)

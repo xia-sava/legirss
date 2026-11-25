@@ -68,7 +68,7 @@ Kotlin Multiplatform と Compose Multiplatform で書いている。動かせる
 
 ## ビルド
 
-JetBrains Runtime 25 が要る。Gradle のデーモンもこれで動かす。
+JetBrains Runtime 25 が要る。Gradle のデーモン、コンパイル、テスト、配布物のどれもこれで動かす。
 
 ```bash
 ./gradlew :desktopApp:run          # 開発用に起動する。データは desktopApp/build/dev-data に置く
